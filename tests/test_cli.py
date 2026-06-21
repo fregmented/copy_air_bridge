@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from copy_air_bridge.cli import DeviceUnavailableError, create_air_conditioner, format_data_point, main, parse_value
+from copy_air_bridge.cli import AirBridgeShell, DeviceUnavailableError, create_air_conditioner, format_data_point, format_status, main, parse_value
 from copy_air_bridge.config import Settings, TuyaDeviceSettings
+from copy_air_bridge.state_machine import NotSupportedActionError
 from copy_air_bridge.tuya_model import DATA_POINTS, validate_command
 
 
@@ -79,6 +81,55 @@ class CliTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, message):
                     value = parse_value(DATA_POINTS[code], raw_value)
                     validate_command(code, value)
+
+    def test_format_status_uses_data_point_names(self) -> None:
+        self.assertEqual(
+            format_status({"dps": {"1": True, "2": 26, "7": "Colding"}}),
+            "| name         | dp | state   |\n"
+            "| ------------ | -- | ------- |\n"
+            "| switch       | 1  | True    |\n"
+            "| temp_current | 2  | 26      |\n"
+            "| mode         | 7  | Colding |",
+        )
+
+    def test_status_command_prints_formatted_status(self) -> None:
+        air_conditioner = Mock()
+        air_conditioner.status.return_value = {"dps": {"1": True, "5": 24}}
+
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            AirBridgeShell(air_conditioner).do_status("")
+
+        self.assertEqual(
+            stdout.getvalue(),
+            "| name     | dp | state |\n"
+            "| -------- | -- | ----- |\n"
+            "| switch   | 1  | True  |\n"
+            "| temp_set | 5  | 24    |\n",
+        )
+
+    def test_get_command_polls_and_prints_current_state(self) -> None:
+        air_conditioner = Mock()
+        air_conditioner.status.return_value = {"dps": {"5": 24}}
+
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            AirBridgeShell(air_conditioner).do_get("temp_set")
+
+        air_conditioner.status.assert_called_once_with()
+        self.assertEqual(
+            stdout.getvalue(),
+            "id=5 | code=temp_set | access=rw | type=value | range=16-32 | step=1\n"
+            "state=24\n",
+        )
+
+    def test_set_command_prints_not_supported_error_without_crashing(self) -> None:
+        air_conditioner = Mock()
+        air_conditioner.set_value.side_effect = NotSupportedActionError("temp_set is not supported in the current device state")
+
+        with patch("sys.stdout", new_callable=StringIO) as stdout:
+            AirBridgeShell(air_conditioner).do_set("temp_set 24")
+
+        air_conditioner.set_value.assert_called_once_with("temp_set", 24)
+        self.assertEqual(stdout.getvalue(), "Not supported: temp_set is not supported in the current device state\n")
 
     def test_create_air_conditioner_checks_availability_on_startup(self) -> None:
         settings_path = Path("data/settings.yaml")

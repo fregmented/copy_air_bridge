@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from copy_air_bridge.config import DEFAULT_SETTINGS_PATH, load_settings
+from copy_air_bridge.state_machine import NotSupportedActionError
 from copy_air_bridge.tuya_client import TuyaAirConditioner
 from copy_air_bridge.tuya_model import DATA_POINTS, DataPoint, validate_command
 
@@ -49,6 +50,32 @@ def format_data_point(data_point: DataPoint) -> str:
     return " | ".join(details)
 
 
+def get_status_value(status: dict[str, Any], data_point: DataPoint) -> Any:
+    dps = status.get("dps", status)
+    return dps.get(str(data_point.id), dps.get(data_point.id))
+
+
+def format_status(status: dict[str, Any]) -> str:
+    dps = status.get("dps", status)
+    id_to_data_point = {data_point.id: data_point for data_point in DATA_POINTS.values()}
+    rows: list[tuple[str, int, Any]] = []
+
+    for raw_dp, state in dps.items():
+        dp = int(raw_dp)
+        data_point = id_to_data_point[dp]
+        rows.append((data_point.code, dp, state))
+
+    rows.sort(key=lambda row: row[1])
+    table_rows = [("name", "dp", "state"), *((name, str(dp), str(state)) for name, dp, state in rows)]
+    widths = [max(len(row[column]) for row in table_rows) for column in range(3)]
+
+    def format_row(row: tuple[str, str, str]) -> str:
+        return "| " + " | ".join(value.ljust(widths[index]) for index, value in enumerate(row)) + " |"
+
+    separator = "| " + " | ".join("-" * width for width in widths) + " |"
+    return "\n".join([format_row(table_rows[0]), separator, *(format_row(row) for row in table_rows[1:])])
+
+
 class AirBridgeShell(cmd.Cmd):
     intro = "Copy Air Bridge interactive CLI. Type help or ? to list commands."
     prompt = "copy-air> "
@@ -70,7 +97,7 @@ class AirBridgeShell(cmd.Cmd):
         if arg.strip():
             print("Usage: status")
             return
-        print(json.dumps(self.air_conditioner.status(), ensure_ascii=False, indent=2, sort_keys=True))
+        print(format_status(self.air_conditioner.status()))
 
     def do_get(self, arg: str) -> None:
         """Show model metadata for one data point: get <code>"""
@@ -83,6 +110,7 @@ class AirBridgeShell(cmd.Cmd):
             print(f"Unknown data point: {parts[0]}")
             return
         print(format_data_point(data_point))
+        print(f"state={get_status_value(self.air_conditioner.status(), data_point)}")
 
     def do_set(self, arg: str) -> None:
         """Set a writable data point value: set <code> <value>"""
@@ -104,7 +132,11 @@ class AirBridgeShell(cmd.Cmd):
             print(f"Invalid value: {error}")
             return
 
-        response = self.air_conditioner.set_value(code, value)
+        try:
+            response = self.air_conditioner.set_value(code, value)
+        except NotSupportedActionError as error:
+            print(f"Not supported: {error}")
+            return
         print(json.dumps(response, ensure_ascii=False, indent=2, sort_keys=True))
 
     def do_quit(self, arg: str) -> bool:
