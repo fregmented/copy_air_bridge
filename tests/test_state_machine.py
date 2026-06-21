@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import Mock, patch
 
+from copy_air_bridge.config import TuyaDeviceSettings
 from copy_air_bridge.state_machine import DeviceStateMachine, NotSupportedActionError
+from copy_air_bridge.tuya_client import TuyaAirConditioner
 
 
 class DeviceStateMachineTest(unittest.TestCase):
@@ -83,6 +86,16 @@ class DeviceStateMachineTest(unittest.TestCase):
 
         state_machine.validate_action("temp_set", 24)
         self.assertIn("temp_set", state_machine.available_buttons())
+
+    def test_tuya_client_updates_state_machine_from_status(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "7": "Colding"}}
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        self.assertEqual(air_conditioner.check_availability(), {"dps": {"1": True, "7": "Colding"}})
+        self.assertIn("temp_set", air_conditioner.available_buttons())
 
 
 if __name__ == "__main__":

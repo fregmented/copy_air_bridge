@@ -13,14 +13,23 @@ class TuyaAirConditioner:
     def __init__(self, settings: TuyaDeviceSettings) -> None:
         self._device = tinytuya.Device(settings.device_id, settings.host, settings.local_key)
         self._device.set_version(settings.version)
+        self._state_machine = DeviceStateMachine({})
 
     def status(self) -> dict[str, Any]:
-        return self._device.status()
+        status = self._device.status()
+        self.update_state(status)
+        return status
+
+    def update_state(self, state: dict[str, Any]) -> None:
+        self._state_machine = DeviceStateMachine(state)
+
+    def check_availability(self) -> dict[str, Any]:
+        return self.status()
 
     def available_buttons(self) -> list[str]:
-        return DeviceStateMachine(self.status()).available_buttons()
+        return self._state_machine.available_buttons()
 
     def set_value(self, code: str, value: Any) -> dict[str, Any]:
         data_point = validate_command(code, value)
-        DeviceStateMachine(self.status()).validate_action(code, value)
+        self._state_machine.validate_action(code, value)
         return self._device.set_value(data_point.id, value)

@@ -12,6 +12,10 @@ from copy_air_bridge.tuya_client import TuyaAirConditioner
 from copy_air_bridge.tuya_model import DATA_POINTS, DataPoint, validate_command
 
 
+class DeviceUnavailableError(RuntimeError):
+    pass
+
+
 def parse_value(data_point: DataPoint, raw_value: str) -> Any:
     if data_point.type == "bool":
         normalized = raw_value.strip().lower()
@@ -133,7 +137,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def create_air_conditioner(settings_path: Path) -> TuyaAirConditioner:
+    settings = load_settings(settings_path)
+    air_conditioner = TuyaAirConditioner(settings.tuya)
+    try:
+        air_conditioner.check_availability()
+    except Exception as error:
+        raise DeviceUnavailableError(f"Failed to connect to Tuya device: {error}") from error
+    return air_conditioner
+
+
 def main() -> None:
     args = build_parser().parse_args()
-    settings = load_settings(args.settings)
-    AirBridgeShell(TuyaAirConditioner(settings.tuya)).cmdloop()
+    try:
+        air_conditioner = create_air_conditioner(args.settings)
+    except DeviceUnavailableError as error:
+        raise SystemExit(str(error)) from error
+    AirBridgeShell(air_conditioner).cmdloop()
