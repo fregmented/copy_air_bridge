@@ -38,6 +38,7 @@ docker compose up --build
 - `GET /health`: 서버 상태 확인
 - `GET /model`: Tuya DP 모델 확인
 - `GET /status`: TinyTuya 상태 조회
+- `GET /buttons`: 현재 디바이스 상태에서 조작 가능한 버튼 목록 조회
 - `POST /commands/{code}`: 쓰기 가능한 Tuya code에 값 설정
 
 예시:

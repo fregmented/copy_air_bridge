@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 copy-air-bridge = "copy_air_bridge.server:main"
+copy-air-cli = "copy_air_bridge.cli:main"
 
 [build-system]
 requires = ["hatchling"]

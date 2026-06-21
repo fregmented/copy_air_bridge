@@ -41,6 +41,7 @@ or documentation are needed.
   connection data.
 - Keep Tuya data-point IDs and SmartThings capability mappings explicit and
   easy to audit.
+- Run All python commands must use uv(ex: run python script, testing, linting, and all other tasks)
 
 ## Tuya Air Conditioner Data Model
 
@@ -65,10 +66,30 @@ The device uses Tuya Things Data Model `modelId` `eh1sso`.
 | 109 | `humidity` | ro | value | 0-100 %, step 1 | Current humidity |
 | 110 | `humidityset` | rw | value | 35-70 %, step 5 | Target humidity |
 
+`mode` is mapped as follows in the SmartThings Edge driver:
+```
+'Auto' => 'Auto'
+'Colding' => 'Cooling'
+'Dehmidify' => 'Dehumidification'
+'Wind' => 'Wind'
+'Save' => 'Eco Mode'
+```
+
 ## Implementation Notes
 
 - Validate writable values against the model ranges before sending commands to
   TinyTuya.
+- Route every device operation through the device state machine before sending
+  commands to TinyTuya. Unsupported operations must raise
+  `NotSupportedActionError`.
+- Use the device state machine as the source of truth for the currently
+  available writable button list exposed to clients.
+- Device state machine rules:
+  - When `switch` is `false`, block every operation except setting `switch` to
+    `true`.
+  - Allow `temp_set` only when `mode` is `Colding`.
+  - Allow `fan_speed_enum` and `turbo` only when `mode` is not `Auto`.
+  - Allow `humidityset` only when `mode` is `Dehmidify`.
 - Read-only properties must not be exposed as writable SmartThings commands.
 - Keep enum values exact when communicating with the Tuya device.
 - If SmartThings capability names differ from Tuya codes, keep the translation

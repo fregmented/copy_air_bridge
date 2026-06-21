@@ -5,6 +5,7 @@ from typing import Any
 import tinytuya
 
 from copy_air_bridge.config import TuyaDeviceSettings
+from copy_air_bridge.state_machine import DeviceStateMachine
 from copy_air_bridge.tuya_model import validate_command
 
 
@@ -16,6 +17,10 @@ class TuyaAirConditioner:
     def status(self) -> dict[str, Any]:
         return self._device.status()
 
+    def available_buttons(self) -> list[str]:
+        return DeviceStateMachine(self.status()).available_buttons()
+
     def set_value(self, code: str, value: Any) -> dict[str, Any]:
         data_point = validate_command(code, value)
+        DeviceStateMachine(self.status()).validate_action(code, value)
         return self._device.set_value(data_point.id, value)
