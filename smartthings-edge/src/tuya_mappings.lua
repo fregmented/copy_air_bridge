@@ -1,12 +1,19 @@
 local mappings = {}
 
+mappings.writable_capabilities = {
+  switch = true,
+  thermostatCoolingSetpoint = true,
+  airConditionerMode = true,
+  airConditionerFanMode = true,
+}
+
 mappings.capability_to_tuya = {
   switch = "switch",
   thermostatCoolingSetpoint = "temp_set",
   temperatureMeasurement = "temp_current",
   relativeHumidityMeasurement = "humidity",
   airConditionerMode = "mode",
-  fanSpeed = "fan_speed_enum",
+  airConditionerFanMode = "fan_speed_enum",
 }
 
 mappings.tuya_to_capability = {
@@ -15,7 +22,7 @@ mappings.tuya_to_capability = {
   temp_current = "temperatureMeasurement",
   humidity = "relativeHumidityMeasurement",
   mode = "airConditionerMode",
-  fan_speed_enum = "fanSpeed",
+  fan_speed_enum = "airConditionerFanMode",
 }
 
 mappings.mode_values = {
@@ -26,10 +33,25 @@ mappings.mode_values = {
   Save = "eco",
 }
 
-mappings.fan_speed_values = {
+mappings.air_conditioner_mode_values = {
+  auto = "Auto",
+  cool = "Colding",
+  dry = "Dehmidify",
+  fanOnly = "Wind",
+  eco = "Save",
+}
+
+mappings.fan_mode_values = {
   auto = "auto",
   low = "low",
   middle = "medium",
+  high = "high",
+}
+
+mappings.smartthings_fan_mode_values = {
+  auto = "auto",
+  low = "low",
+  medium = "middle",
   high = "high",
 }
 
