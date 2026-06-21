@@ -1,0 +1,9 @@
+bridge:
+  host: 0.0.0.0
+  port: 8080
+
+tuya:
+  device_id: replace-with-device-id
+  local_key: replace-with-local-key
+  host: 192.0.2.10
+  version: 3.4

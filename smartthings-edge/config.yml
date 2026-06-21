@@ -1,0 +1,4 @@
+name: copy-air-bridge
+packageKey: copy-air-bridge
+permissions:
+  lan: {}

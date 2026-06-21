@@ -1,0 +1,8 @@
+services:
+  copy-air-bridge:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/settings.yaml:/app/data/settings.yaml:ro
+    restart: unless-stopped

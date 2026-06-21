@@ -1,0 +1,23 @@
+[project]
+name = "copy-air-bridge"
+version = "0.1.0"
+description = "Local Tuya air conditioner bridge for SmartThings Edge"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "pydantic>=2.9.0",
+    "pyyaml>=6.0.2",
+    "tinytuya>=1.16.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[project.scripts]
+copy-air-bridge = "copy_air_bridge.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true

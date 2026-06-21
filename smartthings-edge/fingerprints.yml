@@ -1,0 +1,6 @@
+zigbeeManufacturer:
+  - id: copy-air-bridge/placeholder
+    deviceLabel: Tuya Air Conditioner
+    manufacturer: placeholder
+    model: copy-air-bridge
+    deviceProfileName: air-conditioner
