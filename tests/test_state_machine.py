@@ -97,6 +97,24 @@ class DeviceStateMachineTest(unittest.TestCase):
         self.assertEqual(air_conditioner.check_availability(), {"dps": {"1": True, "7": "Colding"}})
         self.assertIn("temp_set", air_conditioner.available_buttons())
 
+    def test_tuya_client_updates_state_machine_from_set_response(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "7": "Auto"}}
+        device.set_value.side_effect = [
+            {"dps": {"7": "Colding"}},
+            {"dps": {"5": 18}},
+        ]
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        air_conditioner.check_availability()
+        air_conditioner.set_value("mode", "Colding")
+        air_conditioner.set_value("temp_set", 18)
+
+        self.assertEqual(device.set_value.call_args_list[0].args, (7, "Colding"))
+        self.assertEqual(device.set_value.call_args_list[1].args, (5, 18))
+
 
 if __name__ == "__main__":
     unittest.main()

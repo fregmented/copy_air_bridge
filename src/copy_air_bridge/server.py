@@ -19,7 +19,7 @@ class CommandRequest(BaseModel):
 def create_app() -> FastAPI:
     settings = load_settings(DEFAULT_SETTINGS_PATH)
     air_conditioner = TuyaAirConditioner(settings.tuya)
-    app = FastAPI(title="Copy Air Bridge")
+    app = FastAPI(title="Copy Air Bridge", docs_url="/docs", redoc_url="/redoc")
 
     @app.get("/health")
     def health() -> dict[str, str]:

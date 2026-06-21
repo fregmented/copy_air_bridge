@@ -32,4 +32,6 @@ class TuyaAirConditioner:
     def set_value(self, code: str, value: Any) -> dict[str, Any]:
         data_point = validate_command(code, value)
         self._state_machine.validate_action(code, value)
-        return self._device.set_value(data_point.id, value)
+        response = self._device.set_value(data_point.id, value)
+        self.update_state(response)
+        return response
