@@ -2,6 +2,16 @@ bridge:
   host: 0.0.0.0
   port: 8080
 
+ssdp:
+  enabled: true
+  # Set this to the bridge LAN IP, for example 192.168.0.4, when multicast discovery
+  # does not reach the server automatically on macOS/Linux multi-interface hosts.
+  interface: null
+  service_type: urn:schemas-upnp-org:device:CopyAirBridge:1
+  unique_service_name: uuid:copy-air-bridge::urn:schemas-upnp-org:device:CopyAirBridge:1
+  server: CopyAirBridge/0.1 UPnP/1.1
+  notify_interval_seconds: 30
+
 tuya:
   device_id: replace-with-device-id
   local_key: replace-with-local-key

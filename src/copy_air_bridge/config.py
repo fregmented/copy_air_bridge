@@ -22,8 +22,18 @@ class BridgeSettings(BaseModel):
     port: int = Field(default=8080, ge=1, le=65535)
 
 
+class SsdpSettings(BaseModel):
+    enabled: bool = True
+    interface: str | None = None
+    service_type: str = "urn:schemas-upnp-org:device:CopyAirBridge:1"
+    unique_service_name: str = "uuid:copy-air-bridge::urn:schemas-upnp-org:device:CopyAirBridge:1"
+    server: str = "CopyAirBridge/0.1 UPnP/1.1"
+    notify_interval_seconds: int = Field(default=30, ge=1)
+
+
 class Settings(BaseModel):
     bridge: BridgeSettings = Field(default_factory=BridgeSettings)
+    ssdp: SsdpSettings = Field(default_factory=SsdpSettings)
     tuya: TuyaDeviceSettings
 
 

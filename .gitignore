@@ -355,6 +355,5 @@ $RECYCLE.BIN/
 *.lnk
 
 data/settings.yaml
-*.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm+all,windows,linux,macos,visualstudiocode

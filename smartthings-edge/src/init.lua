@@ -13,6 +13,18 @@ local SSDP_PORT = 1900
 local SSDP_SERVICE_TYPE = "urn:schemas-upnp-org:device:CopyAirBridge:1"
 local BRIDGE_LOCATION_FIELD = "bridge_location"
 
+local function device_name(device)
+  if device == nil then
+    return "<nil device>"
+  end
+  return string.format("%s (%s)", tostring(device.label or "<no label>"), tostring(device.id or "<no id>"))
+end
+
+local function log_table(prefix, value)
+  local encoded = json.encode(value)
+  log.info(string.format("%s: %s", prefix, tostring(encoded)))
+end
+
 local function trim(value)
   return (value:gsub("^%s+", ""):gsub("%s+$", ""))
 end
@@ -28,7 +40,15 @@ local function header_value(response, name)
   return nil
 end
 
+local function bridge_api_base_url(location)
+  if location == nil then
+    return nil
+  end
+  return (location:gsub("/rootDesc%.xml%s*$", ""))
+end
+
 local function discover_bridge_location(should_continue)
+  log.info(string.format("SSDP discovery started: service=%s address=%s port=%s", SSDP_SERVICE_TYPE, SSDP_ADDRESS, tostring(SSDP_PORT)))
   local udp = assert(socket.udp())
   udp:settimeout(1)
   udp:setsockname("*", 0)
@@ -52,30 +72,47 @@ local function discover_bridge_location(should_continue)
   local deadline = socket.gettime() + 3
   while socket.gettime() < deadline do
     if should_continue ~= nil and not should_continue() then
+      log.info("SSDP discovery stopped by SmartThings runtime")
       break
     end
 
-    local response = udp:receivefrom()
+    local response, ip, port = udp:receivefrom()
     if response ~= nil then
       local service_type = header_value(response, "ST") or header_value(response, "NT")
       local location = header_value(response, "LOCATION")
+      log.info(string.format(
+        "SSDP response received: ip=%s port=%s service=%s location=%s",
+        tostring(ip),
+        tostring(port),
+        tostring(service_type),
+        tostring(location)
+      ))
       if service_type == SSDP_SERVICE_TYPE and location ~= nil then
         udp:close()
-        return location
+        log.info(string.format("SSDP bridge matched: location=%s base_url=%s", location, bridge_api_base_url(location)))
+        return bridge_api_base_url(location)
       end
     end
   end
 
   udp:close()
+  log.warn("SSDP discovery timed out without matching Copy Air Bridge response")
   return nil
 end
 
 local function bridge_base_url(device, force_discovery)
   local location = device:get_field(BRIDGE_LOCATION_FIELD)
+  log.info(string.format(
+    "bridge location lookup: device=%s cached=%s force_discovery=%s",
+    device_name(device),
+    tostring(location),
+    tostring(force_discovery)
+  ))
   if force_discovery or location == nil then
     location = discover_bridge_location()
     if location ~= nil then
       device:set_field(BRIDGE_LOCATION_FIELD, location, { persist = true })
+      log.info(string.format("bridge location persisted: device=%s location=%s", device_name(device), location))
     end
   end
   return location
@@ -94,6 +131,7 @@ end
 local function request_json_from_url(base_url, method, path, body)
   local response_body = {}
   local body_text = body and json.encode(body) or nil
+  log.info(string.format("bridge request started: %s %s%s body=%s", method, base_url, path, tostring(body_text)))
   local _, status = http.request({
     url = base_url .. path,
     method = method,
@@ -106,6 +144,7 @@ local function request_json_from_url(base_url, method, path, body)
   })
 
   local response_text = table.concat(response_body)
+  log.info(string.format("bridge response received: %s %s -> %s body=%s", method, path, tostring(status), response_text))
   if status ~= 200 then
     log.warn(string.format("bridge request failed: %s %s -> %s %s", method, path, tostring(status), response_text))
     return nil
@@ -114,7 +153,11 @@ local function request_json_from_url(base_url, method, path, body)
   if response_text == "" then
     return {}
   end
-  return json.decode(response_text)
+  local decoded, position, decode_error = json.decode(response_text)
+  if decoded == nil then
+    log.warn(string.format("bridge response JSON decode failed: %s %s position=%s error=%s body=%s", method, path, tostring(position), tostring(decode_error), response_text))
+  end
+  return decoded
 end
 
 local function request_json(device, method, path, body)
@@ -138,6 +181,7 @@ local function request_json(device, method, path, body)
 end
 
 local function emit_status(device, status)
+  log_table(string.format("emitting status for %s", device_name(device)), status)
   if status.switch ~= nil then
     device:emit_event(status.switch and capabilities.switch.switch.on() or capabilities.switch.switch.off())
   end
@@ -223,7 +267,9 @@ local function fan_mode_handler(driver, device, command)
 end
 
 local function discovery_handler(driver, _, should_continue)
+  log.info("SmartThings discovery handler started")
   if should_continue ~= nil and not should_continue() then
+    log.info("SmartThings discovery handler stopped before SSDP search")
     return
   end
   local location = discover_bridge_location(should_continue)
@@ -232,7 +278,7 @@ local function discovery_handler(driver, _, should_continue)
     return
   end
 
-  driver:try_create_device({
+  local create_device_message = {
     type = "LAN",
     device_network_id = "copy-air-bridge",
     label = "Tuya Air Conditioner",
@@ -243,12 +289,25 @@ local function discovery_handler(driver, _, should_continue)
     data = {
       bridge_location = location,
     },
-  })
+  }
+  log_table("trying to create SmartThings device", create_device_message)
+  local success, result = pcall(driver.try_create_device, driver, create_device_message)
+  if success then
+    log.info(string.format("SmartThings try_create_device completed: result=%s", tostring(result)))
+  else
+    log.error(string.format("SmartThings try_create_device failed: error=%s", tostring(result)))
+  end
 end
 
 local function device_added(driver, device)
+  log.info(string.format("device lifecycle invoked: device=%s dni=%s", device_name(device), tostring(device.device_network_id)))
   if device.data ~= nil and device.data.bridge_location ~= nil then
-    device:set_field(BRIDGE_LOCATION_FIELD, device.data.bridge_location, { persist = true })
+    local base_url = bridge_api_base_url(device.data.bridge_location)
+    log.info(string.format("device lifecycle bridge data found: raw=%s base_url=%s", tostring(device.data.bridge_location), tostring(base_url)))
+    device:set_field(BRIDGE_LOCATION_FIELD, base_url, { persist = true })
+    log.info(string.format("device lifecycle bridge location persisted: device=%s location=%s", device_name(device), tostring(base_url)))
+  else
+    log.warn(string.format("device lifecycle has no bridge location data: device=%s", device_name(device)))
   end
 end
 

@@ -112,6 +112,65 @@ smartthings edge:drivers:install
 smartthings edge:drivers:installed
 ```
 
+### 드라이버 업데이트
+
+Edge Driver 코드를 수정한 뒤에는 기존 설치만으로는 허브에 변경 사항이 자동 반영되지 않습니다.
+SmartThings CLI에는 `edge:drivers:update` 명령이 없으므로, 수정한 Lua 코드와 프로필을 다시 패키징하고 채널에 새 패키지를 등록한 뒤 허브에 다시 설치합니다.
+
+1. 저장소 루트에서 최신 코드를 패키징합니다.
+
+   ```bash
+   smartthings edge:drivers:package smartthings-edge
+   ```
+
+2. 패키징된 `copy-air-bridge` 드라이버를 기존 개인 채널에 다시 등록합니다.
+
+   ```bash
+   smartthings edge:channels:assign
+   ```
+
+   CLI가 드라이버와 채널을 선택하라고 요청하면 새로 패키징한 `copy-air-bridge` 드라이버와 기존에 허브가 등록된 채널을 선택합니다.
+
+3. 허브에 드라이버를 다시 설치해 최신 패키지를 반영합니다.
+
+   ```bash
+   smartthings edge:drivers:install
+   ```
+
+   CLI가 허브와 드라이버를 선택하라고 요청하면 대상 SmartThings 허브와 새로 패키징한 `copy-air-bridge` 드라이버를 선택합니다. 이미 설치되어 있어 설치가 거부되거나 이전 동작이 계속 보이면 아래 강제 재설치 절차를 사용합니다.
+
+4. 업데이트 결과를 확인합니다.
+
+   ```bash
+   smartthings edge:drivers:installed
+   smartthings edge:drivers:logcat
+   ```
+
+   `logcat`에서 `copy-air-bridge` 드라이버가 재시작되고 discovery 또는 capability handler 로그가 새 코드 기준으로 출력되는지 확인합니다.
+
+5. SmartThings 앱에서 기존 `Tuya Air Conditioner` 디바이스를 열어 `새로고침`을 실행하거나, 필요하면 기기를 삭제한 뒤 `기기 추가` → `주변 검색`으로 다시 discovery를 실행합니다.
+
+업데이트 후에도 이전 동작이 계속 보이면 아래 순서로 강제 반영합니다.
+
+```bash
+smartthings edge:drivers:uninstall
+smartthings edge:drivers:install
+```
+
+그 다음 SmartThings 앱에서 디바이스를 다시 검색합니다. 이 경우 기존 디바이스가 삭제될 수 있으므로 자동화나 루틴에서 해당 디바이스를 사용 중이면 다시 연결해야 합니다.
+
+Python 브리지 서버 코드를 수정한 경우에는 Edge Driver 업데이트와 별개로 서버도 재시작해야 합니다.
+
+```bash
+uv run copy-air-bridge
+```
+
+Docker로 실행 중이면 이미지를 다시 빌드하고 컨테이너를 재생성합니다.
+
+```bash
+docker compose up --build -d
+```
+
 ### 디바이스 추가 및 동작 확인
 
 1. SmartThings 앱에서 `기기 추가`를 실행합니다.
