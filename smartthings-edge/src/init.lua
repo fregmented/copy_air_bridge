@@ -12,6 +12,8 @@ local SSDP_ADDRESS = "239.255.255.250"
 local SSDP_PORT = 1900
 local SSDP_SERVICE_TYPE = "urn:schemas-upnp-org:device:CopyAirBridge:1"
 local BRIDGE_LOCATION_FIELD = "bridge_location"
+local STATUS_POLL_INTERVAL_SECONDS = 5 * 60
+local STATUS_POLL_TIMER_FIELD = "status_poll_timer"
 
 local function device_name(device)
   if device == nil then
@@ -216,6 +218,24 @@ local function refresh_handler(driver, device)
   end
 end
 
+local function start_status_polling(driver, device)
+  if device:get_field(STATUS_POLL_TIMER_FIELD) ~= nil then
+    log.info(string.format("status polling already scheduled: device=%s interval=%ss", device_name(device), tostring(STATUS_POLL_INTERVAL_SECONDS)))
+    return
+  end
+
+  log.info(string.format("status polling scheduled: device=%s interval=%ss", device_name(device), tostring(STATUS_POLL_INTERVAL_SECONDS)))
+  local timer = device.thread:call_on_schedule(
+    STATUS_POLL_INTERVAL_SECONDS,
+    function()
+      log.info(string.format("status polling requested for %s", device_name(device)))
+      refresh_handler(driver, device)
+    end,
+    "copy-air-bridge-status-poll"
+  )
+  device:set_field(STATUS_POLL_TIMER_FIELD, timer)
+end
+
 local function switch_handler(driver, device, command)
   local tuya_code = mappings.capability_to_tuya.switch
   local value = command.command == capabilities.switch.commands.on.NAME
@@ -299,6 +319,7 @@ end
 
 local function device_added(driver, device)
   log.info(string.format("device lifecycle invoked: device=%s dni=%s", device_name(device), tostring(device.device_network_id)))
+  start_status_polling(driver, device)
   if device.data ~= nil then
     local bridge_location = device.data
     if type(device.data) == "table" then

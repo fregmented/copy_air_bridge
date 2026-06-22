@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
+from starlette.responses import Response as StarletteResponse
 
 from copy_air_bridge.config import DEFAULT_SETTINGS_PATH, load_settings
 from copy_air_bridge.ssdp import SsdpAdvertisement, SsdpAdvertiser, build_location
@@ -45,6 +47,15 @@ def build_root_description(settings_host: str, settings_port: int, service_type:
 
 class CommandRequest(BaseModel):
     value: Any
+
+
+def format_request_log(request: Request, status_code: int, elapsed_ms: float) -> str:
+    client_host = request.client.host if request.client is not None else "unknown"
+    query_string = f"?{request.url.query}" if request.url.query else ""
+    return (
+        f"HTTP {request.method} {request.url.path}{query_string} "
+        f"from={client_host} status={status_code} duration={elapsed_ms:.2f}ms"
+    )
 
 
 def create_app() -> FastAPI:
@@ -88,6 +99,18 @@ def create_app() -> FastAPI:
                 ssdp_advertiser.stop()
 
     app = FastAPI(title="Copy Air Bridge", docs_url="/docs", redoc_url="/redoc", lifespan=lifespan)
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next) -> StarletteResponse:
+        started_at = time.perf_counter()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            LOGGER.info(format_request_log(request, status_code, elapsed_ms))
 
     @app.get("/health")
     def health() -> dict[str, str]:

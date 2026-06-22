@@ -5,8 +5,10 @@ import logging
 import unittest
 from unittest.mock import Mock, patch
 
+from starlette.requests import Request
+
 from copy_air_bridge.config import Settings, SsdpSettings, TuyaDeviceSettings
-from copy_air_bridge.server import build_root_description, configure_logging, create_app
+from copy_air_bridge.server import build_root_description, configure_logging, create_app, format_request_log
 
 
 class ServerTest(unittest.TestCase):
@@ -124,6 +126,42 @@ class ServerTest(unittest.TestCase):
         finally:
             logger.handlers[:] = original_handlers
             logger.setLevel(original_level)
+
+    def test_request_log_format_contains_request_and_response_information(self) -> None:
+        request = Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/health",
+                "query_string": b"verbose=true",
+                "headers": [(b"host", b"testserver")],
+                "client": ("192.0.2.30", 12345),
+                "scheme": "http",
+                "server": ("testserver", 80),
+            }
+        )
+
+        log_output = format_request_log(request, 200, 12.345)
+
+        self.assertEqual(log_output, "HTTP GET /health?verbose=true from=192.0.2.30 status=200 duration=12.35ms")
+
+    def test_request_log_format_contains_error_status_information(self) -> None:
+        request = Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": "/commands/unknown",
+                "query_string": b"",
+                "headers": [(b"host", b"testserver")],
+                "client": ("192.0.2.30", 12345),
+                "scheme": "http",
+                "server": ("testserver", 80),
+            }
+        )
+
+        log_output = format_request_log(request, 404, 1.2)
+
+        self.assertEqual(log_output, "HTTP POST /commands/unknown from=192.0.2.30 status=404 duration=1.20ms")
 
 
 if __name__ == "__main__":
