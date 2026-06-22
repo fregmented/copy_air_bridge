@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
@@ -17,6 +18,7 @@ from copy_air_bridge.tuya_model import DATA_POINTS
 
 
 LOGGER = logging.getLogger("copy_air_bridge")
+STATE_REFRESH_INTERVAL_SECONDS = 60
 
 
 def build_root_description(settings_host: str, settings_port: int, service_type: str, unique_service_name: str) -> str:
@@ -61,13 +63,27 @@ def create_app() -> FastAPI:
             interface=settings.ssdp.interface,
         )
 
+    async def refresh_state_periodically() -> None:
+        while True:
+            try:
+                await asyncio.to_thread(air_conditioner.status)
+            except Exception:
+                LOGGER.exception("Failed to refresh Tuya air conditioner state")
+            await asyncio.sleep(STATE_REFRESH_INTERVAL_SECONDS)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        refresh_task = asyncio.create_task(refresh_state_periodically())
         if ssdp_advertiser is not None:
             ssdp_advertiser.start()
         try:
             yield
         finally:
+            refresh_task.cancel()
+            try:
+                await refresh_task
+            except asyncio.CancelledError:
+                pass
             if ssdp_advertiser is not None:
                 ssdp_advertiser.stop()
 
@@ -100,6 +116,10 @@ def create_app() -> FastAPI:
     @app.get("/buttons")
     def buttons() -> dict[str, list[str]]:
         return {"buttons": air_conditioner.available_buttons()}
+
+    @app.get("/current-th")
+    def current_th() -> dict[str, Any]:
+        return air_conditioner.get_current_th()
 
     @app.post("/commands/{code}")
     def command(code: str, request: CommandRequest) -> dict[str, Any]:

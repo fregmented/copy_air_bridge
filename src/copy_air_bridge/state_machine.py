@@ -21,6 +21,9 @@ class DeviceStateMachine:
     def available_buttons(self) -> list[str]:
         return [code for code, data_point in DATA_POINTS.items() if data_point.writable and self.is_action_supported(code, True)]
 
+    def get_current_th(self) -> dict[str, Any]:
+        return {"temp_current": self._state.get("temp_current"), "humidity": self._state.get("humidity")}
+
     def is_action_supported(self, code: str, value: Any | None = None) -> bool:
         if code not in DATA_POINTS or not DATA_POINTS[code].writable:
             return False

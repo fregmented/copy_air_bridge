@@ -29,6 +29,9 @@ class TuyaAirConditioner:
     def available_buttons(self) -> list[str]:
         return self._state_machine.available_buttons()
 
+    def get_current_th(self) -> dict[str, Any]:
+        return self._state_machine.get_current_th()
+
     def set_value(self, code: str, value: Any) -> dict[str, Any]:
         data_point = validate_command(code, value)
         self._state_machine.validate_action(code, value)

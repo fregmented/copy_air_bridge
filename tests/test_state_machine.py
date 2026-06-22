@@ -87,6 +87,11 @@ class DeviceStateMachineTest(unittest.TestCase):
         state_machine.validate_action("temp_set", 24)
         self.assertIn("temp_set", state_machine.available_buttons())
 
+    def test_current_temperature_and_humidity_are_read_from_normalized_state(self) -> None:
+        state_machine = DeviceStateMachine({"dps": {"2": 23, "109": 48}})
+
+        self.assertEqual(state_machine.get_current_th(), {"temp_current": 23, "humidity": 48})
+
     def test_tuya_client_updates_state_machine_from_status(self) -> None:
         device = Mock()
         device.status.return_value = {"dps": {"1": True, "7": "Colding"}}

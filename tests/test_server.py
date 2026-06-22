@@ -12,12 +12,13 @@ from copy_air_bridge.server import build_root_description, configure_logging, cr
 class ServerTest(unittest.TestCase):
     def create_test_app(self):
         settings = Settings(tuya=TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+        air_conditioner = Mock()
         with patch("copy_air_bridge.server.load_settings", return_value=settings):
-            with patch("copy_air_bridge.server.TuyaAirConditioner", return_value=Mock()):
-                return create_app()
+            with patch("copy_air_bridge.server.TuyaAirConditioner", return_value=air_conditioner):
+                return create_app(), air_conditioner
 
     def test_redoc_endpoint_is_configured(self) -> None:
-        app = self.create_test_app()
+        app, _ = self.create_test_app()
 
         routes = {route.path for route in app.routes}
 
@@ -25,7 +26,7 @@ class ServerTest(unittest.TestCase):
         self.assertIn("/redoc", routes)
 
     def test_swagger_endpoint_is_configured(self) -> None:
-        app = self.create_test_app()
+        app, _ = self.create_test_app()
 
         routes = {route.path for route in app.routes}
 
@@ -33,7 +34,7 @@ class ServerTest(unittest.TestCase):
         self.assertIn("/docs", routes)
 
     def test_openapi_schema_is_available_for_redoc(self) -> None:
-        app = self.create_test_app()
+        app, _ = self.create_test_app()
 
         schema = app.openapi()
 
@@ -72,6 +73,30 @@ class ServerTest(unittest.TestCase):
 
         advertiser.start.assert_called_once_with()
         advertiser.stop.assert_called_once_with()
+
+    def test_air_conditioner_state_is_refreshed_during_app_lifespan(self) -> None:
+        settings = Settings(tuya=TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+        air_conditioner = Mock()
+        with patch("copy_air_bridge.server.load_settings", return_value=settings):
+            with patch("copy_air_bridge.server.TuyaAirConditioner", return_value=air_conditioner):
+                with patch("copy_air_bridge.server.STATE_REFRESH_INTERVAL_SECONDS", 0.01):
+                    app = create_app()
+
+                    async def run_lifespan() -> None:
+                        async with app.router.lifespan_context(app):
+                            await asyncio.sleep(0.02)
+
+                    asyncio.run(run_lifespan())
+
+        self.assertGreaterEqual(air_conditioner.status.call_count, 1)
+
+    def test_current_th_endpoint_returns_temperature_and_humidity(self) -> None:
+        app, air_conditioner = self.create_test_app()
+        route = next(route for route in app.routes if route.path == "/current-th")
+        air_conditioner.get_current_th.return_value = {"temp_current": 23, "humidity": 48}
+
+        self.assertEqual(route.endpoint(), {"temp_current": 23, "humidity": 48})
+        air_conditioner.get_current_th.assert_called_once_with()
 
     def test_ssdp_advertiser_receives_configured_interface(self) -> None:
         settings = Settings(
