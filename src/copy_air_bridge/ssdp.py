@@ -132,14 +132,25 @@ class SsdpAdvertiser:
                 LOGGER.info("SSDP M-SEARCH ignored from %s: %s", address, self._compact_message(message))
 
     def _is_search(self, message: bytes) -> bool:
-        text = message.decode("utf-8", errors="ignore").lower()
-        return "m-search" in text and "ssdp:discover" in text
+        start_line, headers = self._parse_search_message(message)
+        return start_line.startswith("m-search") and headers.get("man") == '"ssdp:discover"'
 
     def _is_matching_search(self, message: bytes) -> bool:
-        text = message.decode("utf-8", errors="ignore").lower()
-        if "m-search" not in text or "ssdp:discover" not in text:
+        start_line, headers = self._parse_search_message(message)
+        if not start_line.startswith("m-search") or headers.get("man") != '"ssdp:discover"':
             return False
-        return f"st: {self.advertisement.service_type.lower()}" in text or "st: ssdp:all" in text
+        search_target = headers.get("st")
+        return search_target in {self.advertisement.service_type.lower(), "ssdp:all"}
+
+    def _parse_search_message(self, message: bytes) -> tuple[str, dict[str, str]]:
+        lines = message.decode("utf-8", errors="ignore").splitlines()
+        start_line = lines[0].strip().lower() if lines else ""
+        headers = {}
+        for line in lines[1:]:
+            name, separator, value = line.partition(":")
+            if separator:
+                headers[name.strip().lower()] = value.strip().lower()
+        return start_line, headers
 
     def _compact_message(self, message: bytes) -> str:
         return " | ".join(message.decode("utf-8", errors="ignore").splitlines())

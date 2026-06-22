@@ -71,6 +71,25 @@ class SsdpTest(unittest.TestCase):
 
         self.assertEqual(socket_instance.recvfrom.call_count, 2)
 
+    def test_matching_search_accepts_header_without_space_after_colon(self) -> None:
+        advertiser = SsdpAdvertiser(self.create_advertisement())
+        message = b"M-SEARCH * HTTP/1.1\r\nHOST:239.255.255.250:1900\r\nMAN:\"ssdp:discover\"\r\nST:urn:schemas-upnp-org:device:CopyAirBridge:1\r\n\r\n"
+
+        self.assertTrue(advertiser._is_matching_search(message))
+
+    def test_matching_search_accepts_ssdp_all(self) -> None:
+        advertiser = SsdpAdvertiser(self.create_advertisement())
+        message = b"M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nST: ssdp:all\r\n\r\n"
+
+        self.assertTrue(advertiser._is_matching_search(message))
+
+    def test_search_ignores_non_matching_search_target(self) -> None:
+        advertiser = SsdpAdvertiser(self.create_advertisement())
+        message = b"M-SEARCH * HTTP/1.1\r\nMAN: \"ssdp:discover\"\r\nST: urn:schemas-upnp-org:device:Other:1\r\n\r\n"
+
+        self.assertTrue(advertiser._is_search(message))
+        self.assertFalse(advertiser._is_matching_search(message))
+
 
 if __name__ == "__main__":
     unittest.main()
