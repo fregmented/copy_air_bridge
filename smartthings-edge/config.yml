@@ -1,4 +1,5 @@
 name: copy-air-bridge
 packageKey: copy-air-bridge
 permissions:
+  discovery: {}
   lan: {}

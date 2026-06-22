@@ -286,9 +286,7 @@ local function discovery_handler(driver, _, should_continue)
     manufacturer = "Copy Air Bridge",
     model = "Tuya eh1sso Air Conditioner",
     vendor_provided_label = "Tuya Air Conditioner",
-    data = {
-      bridge_location = location,
-    },
+    data = location,
   }
   log_table("trying to create SmartThings device", create_device_message)
   local success, result = pcall(driver.try_create_device, driver, create_device_message)
@@ -301,11 +299,23 @@ end
 
 local function device_added(driver, device)
   log.info(string.format("device lifecycle invoked: device=%s dni=%s", device_name(device), tostring(device.device_network_id)))
-  if device.data ~= nil and device.data.bridge_location ~= nil then
-    local base_url = bridge_api_base_url(device.data.bridge_location)
-    log.info(string.format("device lifecycle bridge data found: raw=%s base_url=%s", tostring(device.data.bridge_location), tostring(base_url)))
-    device:set_field(BRIDGE_LOCATION_FIELD, base_url, { persist = true })
-    log.info(string.format("device lifecycle bridge location persisted: device=%s location=%s", device_name(device), tostring(base_url)))
+  if device.data ~= nil then
+    local bridge_location = device.data
+    if type(device.data) == "table" then
+      bridge_location = device.data.bridge_location
+    end
+    local base_url = bridge_api_base_url(bridge_location)
+    if base_url ~= nil then
+      log.info(string.format("device lifecycle bridge data found: raw=%s base_url=%s", tostring(bridge_location), tostring(base_url)))
+      device:set_field(BRIDGE_LOCATION_FIELD, base_url, { persist = true })
+      log.info(string.format("device lifecycle bridge location persisted: device=%s location=%s", device_name(device), tostring(base_url)))
+      return
+    end
+  end
+
+  local cached_location = device:get_field(BRIDGE_LOCATION_FIELD)
+  if cached_location ~= nil then
+    log.info(string.format("device lifecycle bridge location already cached: device=%s location=%s", device_name(device), tostring(cached_location)))
   else
     log.warn(string.format("device lifecycle has no bridge location data: device=%s", device_name(device)))
   end
