@@ -12,8 +12,9 @@ local SSDP_ADDRESS = "239.255.255.250"
 local SSDP_PORT = 1900
 local SSDP_SERVICE_TYPE = "urn:schemas-upnp-org:device:CopyAirBridge:1"
 local BRIDGE_LOCATION_FIELD = "bridge_location"
-local STATUS_POLL_INTERVAL_SECONDS = 5 * 60
+local STATUS_POLL_INTERVAL_SECONDS = 60
 local STATUS_POLL_TIMER_FIELD = "status_poll_timer"
+local request_sequence = 0
 
 local function device_name(device)
   if device == nil then
@@ -25,6 +26,11 @@ end
 local function log_table(prefix, value)
   local encoded = json.encode(value)
   log.info(string.format("%s: %s", prefix, tostring(encoded)))
+end
+
+local function next_request_id()
+  request_sequence = request_sequence + 1
+  return request_sequence
 end
 
 local function trim(value)
@@ -130,12 +136,21 @@ local function command_arg(command, ...)
   return args[1]
 end
 
-local function request_json_from_url(base_url, method, path, body)
+local function request_json_from_url(base_url, method, path, body, reason)
   local response_body = {}
   local body_text = body and json.encode(body) or nil
-  log.info(string.format("bridge request started: %s %s%s body=%s", method, base_url, path, tostring(body_text)))
+  local request_id = next_request_id()
+  local url = base_url .. path
+  log.info(string.format(
+    "bridge server request #%s started: reason=%s method=%s url=%s body=%s",
+    tostring(request_id),
+    tostring(reason or "unspecified"),
+    method,
+    url,
+    tostring(body_text)
+  ))
   local _, status = http.request({
-    url = base_url .. path,
+    url = url,
     method = method,
     headers = {
       ["Content-Type"] = "application/json",
@@ -146,9 +161,23 @@ local function request_json_from_url(base_url, method, path, body)
   })
 
   local response_text = table.concat(response_body)
-  log.info(string.format("bridge response received: %s %s -> %s body=%s", method, path, tostring(status), response_text))
+  log.info(string.format(
+    "bridge server request #%s completed: method=%s url=%s status=%s body=%s",
+    tostring(request_id),
+    method,
+    url,
+    tostring(status),
+    response_text
+  ))
   if status ~= 200 then
-    log.warn(string.format("bridge request failed: %s %s -> %s %s", method, path, tostring(status), response_text))
+    log.warn(string.format(
+      "bridge server request #%s failed: method=%s url=%s status=%s body=%s",
+      tostring(request_id),
+      method,
+      url,
+      tostring(status),
+      response_text
+    ))
     return nil
   end
 
@@ -162,14 +191,14 @@ local function request_json_from_url(base_url, method, path, body)
   return decoded
 end
 
-local function request_json(device, method, path, body)
+local function request_json(device, method, path, body, reason)
   local base_url = bridge_base_url(device)
   if base_url == nil then
     log.warn("Copy Air Bridge server was not found via SSDP")
     return nil
   end
 
-  local result = request_json_from_url(base_url, method, path, body)
+  local result = request_json_from_url(base_url, method, path, body, reason)
   if result ~= nil then
     return result
   end
@@ -179,7 +208,7 @@ local function request_json(device, method, path, body)
   if rediscovered_base_url == nil or rediscovered_base_url == base_url then
     return nil
   end
-  return request_json_from_url(rediscovered_base_url, method, path, body)
+  return request_json_from_url(rediscovered_base_url, method, path, body, (reason or "unspecified") .. " retry")
 end
 
 local function emit_status(device, status)
@@ -212,7 +241,7 @@ end
 
 local function refresh_handler(driver, device)
   log.info(string.format("refresh requested for %s", device.label or device.id))
-  local status = request_json(device, "GET", "/status")
+  local status = request_json(device, "GET", "/status", nil, "refresh status")
   if status ~= nil then
     emit_status(device, status)
   end
@@ -240,7 +269,7 @@ local function switch_handler(driver, device, command)
   local tuya_code = mappings.capability_to_tuya.switch
   local value = command.command == capabilities.switch.commands.on.NAME
   log.info(string.format("set %s to %s", tuya_code, tostring(value)))
-  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value })
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value }, "set " .. tuya_code)
   if status ~= nil then
     emit_status(device, status)
   end
@@ -250,7 +279,7 @@ local function cooling_setpoint_handler(driver, device, command)
   local tuya_code = mappings.capability_to_tuya.thermostatCoolingSetpoint
   local value = command_arg(command, "setpoint", "value")
   log.info(string.format("set %s to %s", tuya_code, tostring(value)))
-  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value })
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value }, "set " .. tuya_code)
   if status ~= nil then
     emit_status(device, status)
   end
@@ -265,7 +294,7 @@ local function air_conditioner_mode_handler(driver, device, command)
     return
   end
   log.info(string.format("set %s to %s", tuya_code, tuya_mode))
-  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = tuya_mode })
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = tuya_mode }, "set " .. tuya_code)
   if status ~= nil then
     emit_status(device, status)
   end
@@ -280,7 +309,7 @@ local function fan_mode_handler(driver, device, command)
     return
   end
   log.info(string.format("set %s to %s", tuya_code, tuya_fan_mode))
-  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = tuya_fan_mode })
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = tuya_fan_mode }, "set " .. tuya_code)
   if status ~= nil then
     emit_status(device, status)
   end
@@ -320,6 +349,7 @@ end
 local function device_added(driver, device)
   log.info(string.format("device lifecycle invoked: device=%s dni=%s", device_name(device), tostring(device.device_network_id)))
   start_status_polling(driver, device)
+  local should_refresh = false
   if device.data ~= nil then
     local bridge_location = device.data
     if type(device.data) == "table" then
@@ -330,15 +360,19 @@ local function device_added(driver, device)
       log.info(string.format("device lifecycle bridge data found: raw=%s base_url=%s", tostring(bridge_location), tostring(base_url)))
       device:set_field(BRIDGE_LOCATION_FIELD, base_url, { persist = true })
       log.info(string.format("device lifecycle bridge location persisted: device=%s location=%s", device_name(device), tostring(base_url)))
-      return
+      should_refresh = true
     end
   end
 
   local cached_location = device:get_field(BRIDGE_LOCATION_FIELD)
   if cached_location ~= nil then
     log.info(string.format("device lifecycle bridge location already cached: device=%s location=%s", device_name(device), tostring(cached_location)))
+    should_refresh = true
   else
     log.warn(string.format("device lifecycle has no bridge location data: device=%s", device_name(device)))
+  end
+  if should_refresh then
+    refresh_handler(driver, device)
   end
 end
 
@@ -347,6 +381,7 @@ local copy_air_bridge = Driver("copy-air-bridge", {
   lifecycle_handlers = {
     added = device_added,
     init = device_added,
+    infoChanged = device_added,
   },
   capability_handlers = {
     [capabilities.refresh.ID] = {
