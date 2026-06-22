@@ -44,6 +44,19 @@ DATA_POINTS: dict[str, DataPoint] = {
 }
 
 
+def status_to_codes(status: dict[str, Any]) -> dict[str, Any]:
+    dps = status.get("dps")
+    if not isinstance(dps, dict):
+        return status
+
+    coded_status = {code: status[code] for code in DATA_POINTS if code in status}
+    for code, data_point in DATA_POINTS.items():
+        value = dps.get(str(data_point.id), dps.get(data_point.id))
+        if value is not None:
+            coded_status[code] = value
+    return coded_status
+
+
 def validate_command(code: str, value: Any) -> DataPoint:
     data_point = DATA_POINTS[code]
 

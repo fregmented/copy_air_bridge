@@ -6,7 +6,7 @@ import tinytuya
 
 from copy_air_bridge.config import TuyaDeviceSettings
 from copy_air_bridge.state_machine import DeviceStateMachine
-from copy_air_bridge.tuya_model import validate_command
+from copy_air_bridge.tuya_model import status_to_codes, validate_command
 
 
 class TuyaAirConditioner:
@@ -18,10 +18,10 @@ class TuyaAirConditioner:
     def status(self) -> dict[str, Any]:
         status = self._device.status()
         self.update_state(status)
-        return status
+        return status_to_codes(status)
 
     def update_state(self, state: dict[str, Any]) -> None:
-        self._state_machine = DeviceStateMachine(state)
+        self._state_machine = DeviceStateMachine(state, self._state_machine.state)
 
     def check_availability(self) -> dict[str, Any]:
         return self.status()
@@ -37,4 +37,4 @@ class TuyaAirConditioner:
         self._state_machine.validate_action(code, value)
         response = self._device.set_value(data_point.id, value)
         self.update_state(response)
-        return response
+        return status_to_codes(response)

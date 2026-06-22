@@ -49,12 +49,19 @@ class CommandRequest(BaseModel):
     value: Any
 
 
-def format_request_log(request: Request, status_code: int, elapsed_ms: float) -> str:
+async def format_request_log(request: Request, status_code: int, elapsed_ms: float, response_body: bytes = b'') -> str:
     client_host = request.client.host if request.client is not None else "unknown"
     query_string = f"?{request.url.query}" if request.url.query else ""
+    request_body = await request.body()
     return (
-        f"HTTP {request.method} {request.url.path}{query_string} "
-        f"from={client_host} status={status_code} duration={elapsed_ms:.2f}ms"
+        f"""
+HTTP {request.method} {request.url.path}{query_string}
+BODY=
+{request_body.decode('utf-8') if request_body else ''}
+from={client_host} status={status_code} duration={elapsed_ms:.2f}ms\n
+RESPONSE=
+{response_body.decode('utf-8')}
+"""
     )
 
 
@@ -84,17 +91,11 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        refresh_task = asyncio.create_task(refresh_state_periodically())
         if ssdp_advertiser is not None:
             ssdp_advertiser.start()
         try:
             yield
         finally:
-            refresh_task.cancel()
-            try:
-                await refresh_task
-            except asyncio.CancelledError:
-                pass
             if ssdp_advertiser is not None:
                 ssdp_advertiser.stop()
 
@@ -104,13 +105,17 @@ def create_app() -> FastAPI:
     async def log_requests(request: Request, call_next) -> StarletteResponse:
         started_at = time.perf_counter()
         status_code = 500
+        response_body = b""
         try:
             response = await call_next(request)
             status_code = response.status_code
-            return response
+            async for chunk in response.body_iterator:
+                response_body += chunk
+            return Response(content=response_body, status_code=status_code,
+                            headers=response.headers, media_type=response.media_type,)
         finally:
             elapsed_ms = (time.perf_counter() - started_at) * 1000
-            LOGGER.info(format_request_log(request, status_code, elapsed_ms))
+            LOGGER.info(await format_request_log(request, status_code, elapsed_ms, response_body))
 
     @app.get("/health")
     def health() -> dict[str, str]:

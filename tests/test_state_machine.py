@@ -92,6 +92,41 @@ class DeviceStateMachineTest(unittest.TestCase):
 
         self.assertEqual(state_machine.get_current_th(), {"temp_current": 23, "humidity": 48})
 
+    def test_state_machine_formats_normalized_state_as_table(self) -> None:
+        state_machine = DeviceStateMachine({"dps": {"1": False, "2": 23, "7": "Colding"}})
+
+        self.assertEqual(
+            state_machine.format_state_table().splitlines()[:5],
+            [
+                "| dp  | name           | state(old) | state(new) |",
+                "| --- | -------------- | ---------- | ---------- |",
+                "| 1   | switch         |            | false      |",
+                "| 2   | temp_current   |            | 23         |",
+                "| 5   | temp_set       |            |            |",
+            ],
+        )
+        self.assertIn("| 7   | mode           |            | Colding    |", state_machine.format_state_table())
+
+    def test_state_machine_formats_previous_state_as_table(self) -> None:
+        state_machine = DeviceStateMachine(
+            {"dps": {"1": True, "2": 24, "7": "Colding"}},
+            {"dps": {"1": False, "2": 23, "7": "Auto"}},
+        )
+
+        table = state_machine.format_state_table()
+
+        self.assertIn("| 1   | switch         | false      | true       |", table)
+        self.assertIn("| 2   | temp_current   | 23         | 24         |", table)
+        self.assertIn("| 7   | mode           | Auto       | Colding    |", table)
+
+    def test_state_machine_logs_state_table_when_updated(self) -> None:
+        with self.assertLogs("copy_air_bridge", level="INFO") as logs:
+            DeviceStateMachine({"dps": {"1": False, "7": "Auto"}})
+
+        self.assertIn("Device state updated:\n| dp  | name           | state(old) | state(new) |", logs.output[0])
+        self.assertIn("| 1   | switch         |            | false      |", logs.output[0])
+        self.assertIn("| 7   | mode           |            | Auto       |", logs.output[0])
+
     def test_tuya_client_updates_state_machine_from_status(self) -> None:
         device = Mock()
         device.status.return_value = {"dps": {"1": True, "7": "Colding"}}
@@ -99,8 +134,20 @@ class DeviceStateMachineTest(unittest.TestCase):
         with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
             air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
 
-        self.assertEqual(air_conditioner.check_availability(), {"dps": {"1": True, "7": "Colding"}})
+        self.assertEqual(air_conditioner.check_availability(), {"switch": True, "mode": "Colding"})
         self.assertIn("temp_set", air_conditioner.available_buttons())
+
+    def test_tuya_client_returns_status_with_data_point_names(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "2": 23, "5": 24, "7": "Colding"}}
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        self.assertEqual(
+            air_conditioner.status(),
+            {"switch": True, "temp_current": 23, "temp_set": 24, "mode": "Colding"},
+        )
 
     def test_tuya_client_updates_state_machine_from_set_response(self) -> None:
         device = Mock()
@@ -119,6 +166,18 @@ class DeviceStateMachineTest(unittest.TestCase):
 
         self.assertEqual(device.set_value.call_args_list[0].args, (7, "Colding"))
         self.assertEqual(device.set_value.call_args_list[1].args, (5, 18))
+
+    def test_tuya_client_returns_set_response_with_data_point_names(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "7": "Colding"}}
+        device.set_value.return_value = {"dps": {"5": 18}}
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        air_conditioner.check_availability()
+
+        self.assertEqual(air_conditioner.set_value("temp_set", 18), {"temp_set": 18})
 
 
 if __name__ == "__main__":
