@@ -175,6 +175,24 @@ local function request_json_from_url(base_url, method, path, body, reason)
     tostring(status),
     response_text
   ))
+
+  if type(status) == "number" and status >= 400 then
+    local decoded = nil
+    if response_text ~= "" then
+      decoded = json.decode(response_text)
+    end
+    local detail = decoded and decoded.detail or response_text
+    local message = string.format(
+      "Copy Air Bridge request failed immediately: method=%s path=%s status=%s detail=%s",
+      method,
+      path,
+      tostring(status),
+      tostring(detail)
+    )
+    log.warn(string.format("bridge server request #%s failed: %s", tostring(request_id), message))
+    return nil, "http_error", message
+  end
+
   if status ~= 200 then
     log.warn(string.format(
       "bridge server request #%s failed: method=%s url=%s status=%s body=%s",
@@ -184,7 +202,7 @@ local function request_json_from_url(base_url, method, path, body, reason)
       tostring(status),
       response_text
     ))
-    return nil
+    return nil, "transport_error", tostring(status)
   end
 
   if response_text == "" then
@@ -204,9 +222,12 @@ local function request_json(device, method, path, body, reason)
     return nil
   end
 
-  local result = request_json_from_url(base_url, method, path, body, reason)
+  local result, error_type, error_message = request_json_from_url(base_url, method, path, body, reason)
   if result ~= nil then
     return result
+  end
+  if error_type == "http_error" then
+    error(error_message)
   end
 
   log.warn("cached Copy Air Bridge location failed; rediscovering via SSDP")
@@ -214,7 +235,11 @@ local function request_json(device, method, path, body, reason)
   if rediscovered_base_url == nil or rediscovered_base_url == base_url then
     return nil
   end
-  return request_json_from_url(rediscovered_base_url, method, path, body, (reason or "unspecified") .. " retry")
+  result, error_type, error_message = request_json_from_url(rediscovered_base_url, method, path, body, (reason or "unspecified") .. " retry")
+  if error_type == "http_error" then
+    error(error_message)
+  end
+  return result
 end
 
 local function emit_supported_air_conditioner_modes(device)
@@ -281,6 +306,105 @@ local function emit_status(device, status)
   end
   if status.light ~= nil then
     device:emit_event(custom_capabilities.display_light.displayLight(mappings.display_light_values[status.light]))
+  end
+end
+
+local function command_component_id(command)
+  return command and command.component or "main"
+end
+
+local function emit_latest_state_event(device, command, capability_id, attribute_name, event_from_state)
+  if device == nil or device.get_latest_state == nil then
+    return false
+  end
+
+  local component_id = command_component_id(command)
+  local ok, state = pcall(device.get_latest_state, device, component_id, capability_id, attribute_name)
+  if not ok or state == nil then
+    log.warn(string.format(
+      "failed to read latest state for immediate command failure: device=%s component=%s capability=%s attribute=%s error=%s",
+      device_name(device),
+      tostring(component_id),
+      tostring(capability_id),
+      tostring(attribute_name),
+      tostring(state)
+    ))
+    return false
+  end
+
+  local event = event_from_state(state)
+  if event == nil then
+    return false
+  end
+  device:emit_event(event)
+  log.info(string.format(
+    "re-emitted latest state after failed command: device=%s component=%s capability=%s attribute=%s value=%s",
+    device_name(device),
+    tostring(component_id),
+    tostring(capability_id),
+    tostring(attribute_name),
+    tostring(state)
+  ))
+  return true
+end
+
+local function emit_latest_switch(device, command)
+  return emit_latest_state_event(device, command, capabilities.switch.ID, "switch", function(state)
+    return state == "on" and capabilities.switch.switch.on() or capabilities.switch.switch.off()
+  end)
+end
+
+local function emit_latest_cooling_setpoint(device, command)
+  return emit_latest_state_event(device, command, capabilities.thermostatCoolingSetpoint.ID, "coolingSetpoint", function(state)
+    return capabilities.thermostatCoolingSetpoint.coolingSetpoint({ value = state, unit = "C" })
+  end)
+end
+
+local function emit_latest_air_conditioner_mode(device, command)
+  return emit_latest_state_event(device, command, capabilities.airConditionerMode.ID, "airConditionerMode", function(state)
+    return capabilities.airConditionerMode.airConditionerMode(state)
+  end)
+end
+
+local function emit_latest_fan_mode(device, command)
+  return emit_latest_state_event(device, command, capabilities.airConditionerFanMode.ID, "fanMode", function(state)
+    return capabilities.airConditionerFanMode.fanMode(state)
+  end)
+end
+
+local function emit_latest_air_direction(device, command)
+  return emit_latest_state_event(device, command, custom_capabilities.air_direction.ID, "airDirection", function(state)
+    return custom_capabilities.air_direction.airDirection(state)
+  end)
+end
+
+local function emit_latest_humidity_setpoint(device, command)
+  return emit_latest_state_event(device, command, custom_capabilities.humidity_setpoint.ID, "humiditySetpoint", function(state)
+    return custom_capabilities.humidity_setpoint.humiditySetpoint(state)
+  end)
+end
+
+local function emit_latest_display_light(device, command)
+  return emit_latest_state_event(device, command, custom_capabilities.display_light.ID, "displayLight", function(state)
+    return custom_capabilities.display_light.displayLight(state)
+  end)
+end
+
+local function with_immediate_command_failure(handler, emit_latest_state)
+  return function(driver, device, command)
+    local ok, result = pcall(handler, driver, device, command)
+    if ok then
+      return result
+    end
+
+    local error_message = tostring(result)
+    if not error_message:find("Copy Air Bridge request failed immediately", 1, true) then
+      error(result)
+    end
+
+    log.warn(string.format("command failed immediately: device=%s error=%s", device_name(device), error_message))
+    emit_latest_state(device, command)
+    return nil
   end
 end
 
@@ -490,27 +614,27 @@ local copy_air_bridge = Driver("copy-air-bridge", {
       [capabilities.refresh.commands.refresh.NAME] = refresh_handler,
     },
     [capabilities.switch.ID] = {
-      [capabilities.switch.commands.on.NAME] = switch_handler,
-      [capabilities.switch.commands.off.NAME] = switch_handler,
+      [capabilities.switch.commands.on.NAME] = with_immediate_command_failure(switch_handler, emit_latest_switch),
+      [capabilities.switch.commands.off.NAME] = with_immediate_command_failure(switch_handler, emit_latest_switch),
     },
     [capabilities.thermostatCoolingSetpoint.ID] = {
-      [capabilities.thermostatCoolingSetpoint.commands.setCoolingSetpoint.NAME] = cooling_setpoint_handler,
+      [capabilities.thermostatCoolingSetpoint.commands.setCoolingSetpoint.NAME] = with_immediate_command_failure(cooling_setpoint_handler, emit_latest_cooling_setpoint),
     },
     [capabilities.airConditionerMode.ID] = {
-      [capabilities.airConditionerMode.commands.setAirConditionerMode.NAME] = air_conditioner_mode_handler,
+      [capabilities.airConditionerMode.commands.setAirConditionerMode.NAME] = with_immediate_command_failure(air_conditioner_mode_handler, emit_latest_air_conditioner_mode),
     },
     [capabilities.airConditionerFanMode.ID] = {
-      [capabilities.airConditionerFanMode.commands.setFanMode.NAME] = fan_mode_handler,
+      [capabilities.airConditionerFanMode.commands.setFanMode.NAME] = with_immediate_command_failure(fan_mode_handler, emit_latest_fan_mode),
     },
     [custom_capabilities.air_direction.ID] = {
-      [custom_capabilities.air_direction.commands.setAirDirection.NAME] = air_direction_handler,
+      [custom_capabilities.air_direction.commands.setAirDirection.NAME] = with_immediate_command_failure(air_direction_handler, emit_latest_air_direction),
     },
     [custom_capabilities.humidity_setpoint.ID] = {
-      [custom_capabilities.humidity_setpoint.commands.setHumiditySetpoint.NAME] = humidity_setpoint_handler,
+      [custom_capabilities.humidity_setpoint.commands.setHumiditySetpoint.NAME] = with_immediate_command_failure(humidity_setpoint_handler, emit_latest_humidity_setpoint),
     },
     [custom_capabilities.display_light.ID] = {
-      [custom_capabilities.display_light.commands.on.NAME] = display_light_handler,
-      [custom_capabilities.display_light.commands.off.NAME] = display_light_handler,
+      [custom_capabilities.display_light.commands.on.NAME] = with_immediate_command_failure(display_light_handler, emit_latest_display_light),
+      [custom_capabilities.display_light.commands.off.NAME] = with_immediate_command_failure(display_light_handler, emit_latest_display_light),
     },
   },
 })

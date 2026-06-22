@@ -1,0 +1,28 @@
+{
+  "tag": "ko",
+  "label": "조명",
+  "attributes": {
+    "displayLight": {
+      "label": "조명",
+      "displayTemplate": "{{attribute}}",
+      "i18n": {
+        "value": {
+          "On": {
+            "label": "켜짐"
+          },
+          "Off": {
+            "label": "꺼짐"
+          }
+        }
+      }
+    }
+  },
+  "commands": {
+    "on": {
+      "label": "켜기"
+    },
+    "off": {
+      "label": "끄기"
+    }
+  }
+}

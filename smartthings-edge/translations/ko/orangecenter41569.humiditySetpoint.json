@@ -1,0 +1,20 @@
+{
+  "tag": "ko",
+  "label": "목표 습도",
+  "attributes": {
+    "humiditySetpoint": {
+      "label": "목표 습도",
+      "displayTemplate": "{{attribute}} {{unit}}"
+    }
+  },
+  "commands": {
+    "setHumiditySetpoint": {
+      "label": "목표 습도 설정",
+      "arguments": {
+        "humidity": {
+          "label": "습도"
+        }
+      }
+    }
+  }
+}

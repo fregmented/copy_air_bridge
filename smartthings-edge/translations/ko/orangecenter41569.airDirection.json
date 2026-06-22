@@ -1,0 +1,50 @@
+{
+  "tag": "ko",
+  "label": "풍향",
+  "attributes": {
+    "airDirection": {
+      "label": "풍향",
+      "displayTemplate": "{{attribute}}",
+      "i18n": {
+        "value": {
+          "Stop": {
+            "label": "정지"
+          },
+          "Horizontal": {
+            "label": "좌우"
+          },
+          "Vertical": {
+            "label": "상하"
+          },
+          "ALL": {
+            "label": "전체"
+          }
+        }
+      }
+    }
+  },
+  "commands": {
+    "setAirDirection": {
+      "label": "풍향 설정",
+      "arguments": {
+        "direction": {
+          "label": "방향",
+          "i18n": {
+            "Stop": {
+              "label": "정지"
+            },
+            "Horizontal": {
+              "label": "좌우"
+            },
+            "Vertical": {
+              "label": "상하"
+            },
+            "ALL": {
+              "label": "전체"
+            }
+          }
+        }
+      }
+    }
+  }
+}
