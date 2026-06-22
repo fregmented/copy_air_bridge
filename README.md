@@ -1,6 +1,6 @@
 # copy_air_bridge
 
-Tuya IoT 에어컨을 로컬 네트워크에서 TinyTuya로 제어하고 SmartThings Edge Driver와 연동하기 위한 브리지입니다.
+Tuya IoT 에어컨(귀뚜라미 KAA-15W)을 로컬 네트워크에서 TinyTuya로 제어하고 SmartThings Edge Driver와 연동하기 위한 브리지입니다.
 
 ## 구조
 
