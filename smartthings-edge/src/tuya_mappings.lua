@@ -26,33 +26,41 @@ mappings.tuya_to_capability = {
 }
 
 mappings.mode_values = {
-  Auto = "auto",
-  Colding = "cool",
-  Dehmidify = "dry",
-  Wind = "fanOnly",
-  Save = "eco",
+  Auto = "Auto",
+  Colding = "Cooling",
+  Dehmidify = "Dehumid",
+  Wind = "Fan",
+  Save = "Eco",
 }
 
 mappings.air_conditioner_mode_values = {
-  auto = "Auto",
-  cool = "Colding",
-  dry = "Dehmidify",
-  fanOnly = "Wind",
-  eco = "Save",
+  Auto = { mode = "Auto", sleepfunc = false, turbo = false },
+  Cooling = { mode = "Colding", sleepfunc = false, turbo = false },
+  Dehumid = { mode = "Dehmidify", sleepfunc = false, turbo = false },
+  Fan = { mode = "Wind", sleepfunc = false, turbo = false },
+  Eco = { mode = "Save", sleepfunc = false, turbo = false },
+  Silent = { mode = "Colding", sleepfunc = true, turbo = false },
+  Power = { mode = "Colding", sleepfunc = false, turbo = true },
 }
 
+mappings.air_conditioner_modes = { "Auto", "Cooling", "Dehumid", "Fan", "Eco", "Silent", "Power" }
+
+mappings.fan_modes = { "Auto", "Low", "Mid", "High" }
+
+mappings.auto_only_fan_modes = { "Auto" }
+
 mappings.fan_mode_values = {
-  auto = "auto",
-  low = "low",
-  middle = "medium",
-  high = "high",
+  auto = "Auto",
+  low = "Low",
+  middle = "Mid",
+  high = "High",
 }
 
 mappings.smartthings_fan_mode_values = {
-  auto = "auto",
-  low = "low",
-  medium = "middle",
-  high = "high",
+  Auto = "auto",
+  Low = "low",
+  Mid = "middle",
+  High = "high",
 }
 
 return mappings

@@ -211,6 +211,32 @@ local function request_json(device, method, path, body, reason)
   return request_json_from_url(rediscovered_base_url, method, path, body, (reason or "unspecified") .. " retry")
 end
 
+local function emit_supported_air_conditioner_modes(device)
+  device:emit_event(capabilities.airConditionerMode.supportedAcModes(mappings.air_conditioner_modes))
+  device:emit_event(capabilities.airConditionerMode.availableAcModes(mappings.air_conditioner_modes))
+end
+
+local function emit_fan_modes(device, air_conditioner_mode)
+  device:emit_event(capabilities.airConditionerFanMode.supportedAcFanModes(mappings.fan_modes))
+  if air_conditioner_mode == "Auto" or air_conditioner_mode == "Silent" or air_conditioner_mode == "Power" then
+    device:emit_event(capabilities.airConditionerFanMode.availableAcFanModes(mappings.auto_only_fan_modes))
+  else
+    device:emit_event(capabilities.airConditionerFanMode.availableAcFanModes(mappings.fan_modes))
+  end
+end
+
+local function air_conditioner_mode_from_status(status)
+  if status.mode == "Colding" then
+    if status.sleepfunc == true then
+      return "Silent"
+    end
+    if status.turbo == true then
+      return "Power"
+    end
+  end
+  return mappings.mode_values[status.mode]
+end
+
 local function emit_status(device, status)
   log_table(string.format("emitting status for %s", device_name(device)), status)
   if status.switch ~= nil then
@@ -226,9 +252,10 @@ local function emit_status(device, status)
     device:emit_event(capabilities.relativeHumidityMeasurement.humidity(status.humidity))
   end
   if status.mode ~= nil then
-    local mode = mappings.mode_values[status.mode]
+    local mode = air_conditioner_mode_from_status(status)
     if mode ~= nil then
       device:emit_event(capabilities.airConditionerMode.airConditionerMode(mode))
+      emit_fan_modes(device, mode)
     end
   end
   if status.fan_speed_enum ~= nil then
@@ -286,15 +313,35 @@ local function cooling_setpoint_handler(driver, device, command)
 end
 
 local function air_conditioner_mode_handler(driver, device, command)
-  local tuya_code = mappings.capability_to_tuya.airConditionerMode
   local requested_mode = command_arg(command, "mode", "airConditionerMode", "value")
-  local tuya_mode = mappings.air_conditioner_mode_values[requested_mode]
-  if tuya_mode == nil then
+  local tuya_values = mappings.air_conditioner_mode_values[requested_mode]
+  if tuya_values == nil then
     log.warn(string.format("unsupported air conditioner mode: %s", tostring(requested_mode)))
     return
   end
-  log.info(string.format("set %s to %s", tuya_code, tuya_mode))
-  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = tuya_mode }, "set " .. tuya_code)
+
+  local status = request_json(device, "GET", "/status", nil, "read status before setting air conditioner mode")
+  if status == nil then
+    return
+  end
+
+  local command_order = { "mode", "sleepfunc", "turbo" }
+  if requested_mode == "Auto" then
+    command_order = { "sleepfunc", "turbo", "mode" }
+  end
+  for _, tuya_code in ipairs(command_order) do
+    local value = tuya_values[tuya_code]
+    if status[tuya_code] == value then
+      log.info(string.format("skip %s; already %s", tuya_code, tostring(value)))
+      goto continue
+    end
+    log.info(string.format("set %s to %s", tuya_code, tostring(value)))
+    status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value }, "set " .. tuya_code)
+    if status == nil then
+      return
+    end
+    ::continue::
+  end
   if status ~= nil then
     emit_status(device, status)
   end
@@ -348,6 +395,8 @@ end
 
 local function device_added(driver, device)
   log.info(string.format("device lifecycle invoked: device=%s dni=%s", device_name(device), tostring(device.device_network_id)))
+  emit_supported_air_conditioner_modes(device)
+  emit_fan_modes(device, nil)
   start_status_polling(driver, device)
   local should_refresh = false
   if device.data ~= nil then

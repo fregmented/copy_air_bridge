@@ -9,6 +9,9 @@ from copy_air_bridge.state_machine import DeviceStateMachine
 from copy_air_bridge.tuya_model import normalize_command_value, status_to_codes, validate_command
 
 
+SKIP_UNCHANGED_CODES = {"turbo", "sleepfunc", "mode"}
+
+
 class TuyaAirConditioner:
     def __init__(self, settings: TuyaDeviceSettings) -> None:
         self._device = tinytuya.Device(settings.device_id, settings.host, settings.local_key)
@@ -35,7 +38,10 @@ class TuyaAirConditioner:
     def set_value(self, code: str, value: Any) -> dict[str, Any]:
         value = normalize_command_value(code, value)
         data_point = validate_command(code, value)
+        current_status = self.status()
         self._state_machine.validate_action(code, value)
+        if code in SKIP_UNCHANGED_CODES and current_status.get(code) == value:
+            return current_status
         response = self._device.set_value(data_point.id, value)
         self.update_state(response)
         return status_to_codes(response)

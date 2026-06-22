@@ -151,7 +151,11 @@ class DeviceStateMachineTest(unittest.TestCase):
 
     def test_tuya_client_updates_state_machine_from_set_response(self) -> None:
         device = Mock()
-        device.status.return_value = {"dps": {"1": True, "7": "Auto"}}
+        device.status.side_effect = [
+            {"dps": {"1": True, "7": "Auto"}},
+            {"dps": {"1": True, "7": "Auto"}},
+            {"dps": {"1": True, "7": "Colding"}},
+        ]
         device.set_value.side_effect = [
             {"dps": {"7": "Colding"}},
             {"dps": {"5": 18}},
@@ -178,6 +182,43 @@ class DeviceStateMachineTest(unittest.TestCase):
         air_conditioner.check_availability()
 
         self.assertEqual(air_conditioner.set_value("temp_set", 18), {"temp_set": 18})
+
+    def test_tuya_client_skips_unchanged_turbo_sleepfunc_and_mode_commands(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "7": "Colding", "103": True, "104": False}}
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        for code, value in (("turbo", True), ("sleepfunc", False), ("mode", "Colding")):
+            with self.subTest(code=code):
+                self.assertEqual(air_conditioner.set_value(code, value)[code], value)
+
+        device.set_value.assert_not_called()
+
+    def test_tuya_client_sends_changed_tracked_commands_after_status_refresh(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "7": "Colding", "103": False}}
+        device.set_value.return_value = {"dps": {"103": True}}
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        self.assertEqual(air_conditioner.set_value("turbo", True), {"turbo": True})
+
+        self.assertEqual(device.set_value.call_args.args, (103, True))
+
+    def test_tuya_client_still_sends_unchanged_untracked_commands(self) -> None:
+        device = Mock()
+        device.status.return_value = {"dps": {"1": True, "7": "Colding", "106": True}}
+        device.set_value.return_value = {"dps": {"106": True}}
+
+        with patch("copy_air_bridge.tuya_client.tinytuya.Device", return_value=device):
+            air_conditioner = TuyaAirConditioner(TuyaDeviceSettings(device_id="device", local_key="key", host="192.0.2.10"))
+
+        self.assertEqual(air_conditioner.set_value("light", True), {"light": True})
+
+        self.assertEqual(device.set_value.call_args.args, (106, True))
 
 
 if __name__ == "__main__":
