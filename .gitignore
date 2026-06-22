@@ -355,6 +355,7 @@ $RECYCLE.BIN/
 *.lnk
 
 data/settings.yaml
+deploy/systemd/copy-air-bridge*.service
 st_update.sh
 
 # End of https://www.toptal.com/developers/gitignore/api/python,pycharm+all,windows,linux,macos,visualstudiocode

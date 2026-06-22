@@ -26,6 +26,25 @@ uv run copy-air-bridge
 
 `data/settings.yaml`에는 실제 Tuya `device_id`, `local_key`, IP 주소를 로컬 환경에서만 입력하세요.
 
+## systemd 실행
+
+리눅스 서버에서 systemd 서비스 파일을 생성하려면 저장소 루트에서 다음 명령을 실행합니다.
+
+```bash
+scripts/render-systemd-unit.sh local
+```
+
+스크립트는 현재 작업 디렉터리를 systemd `WorkingDirectory`로 사용해
+`deploy/systemd/copy-air-bridge-local.service`처럼 `copy-air-bridge-{custom_value}.service`
+이름의 unit 파일을 생성하고, 먼저 `uv sync --frozen`을 실행해 서비스 실행에 필요한
+가상환경을 준비합니다.
+
+시스템 서비스로 바로 설치하고 시작하려면 다음처럼 실행합니다.
+
+```bash
+scripts/render-systemd-unit.sh local --install
+```
+
 ## Docker 실행
 
 ```bash

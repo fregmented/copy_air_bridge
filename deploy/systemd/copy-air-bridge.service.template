@@ -1,0 +1,16 @@
+[Unit]
+Description=Copy Air Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{USER}}
+Group={{GROUP}}
+WorkingDirectory={{WORKING_DIRECTORY}}
+ExecStart={{UV_BIN}} run copy-air-bridge
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
