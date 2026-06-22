@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from copy_air_bridge.cli import AirBridgeShell, DeviceUnavailableError, create_air_conditioner, format_data_point, format_status, main, parse_value
 from copy_air_bridge.config import Settings, TuyaDeviceSettings
 from copy_air_bridge.state_machine import NotSupportedActionError
-from copy_air_bridge.tuya_model import DATA_POINTS, validate_command
+from copy_air_bridge.tuya_model import DATA_POINTS, normalize_command_value, validate_command
 
 
 class CliTest(unittest.TestCase):
@@ -68,6 +68,30 @@ class CliTest(unittest.TestCase):
                 value = parse_value(DATA_POINTS[code], raw_value)
                 with self.assertRaisesRegex(ValueError, "read-only"):
                     validate_command(code, value)
+
+    def test_convertible_integer_data_point_values_are_normalized(self) -> None:
+        examples = [
+            ("temp_set", "24", 24),
+            ("temp_set", "24.0", 24),
+            ("temp_set", 24.0, 24),
+            ("humidityset", "55", 55),
+        ]
+        for code, value, expected in examples:
+            with self.subTest(code=code, value=value):
+                normalized = normalize_command_value(code, value)
+                self.assertEqual(normalized, expected)
+                validate_command(code, normalized)
+
+    def test_non_integral_values_are_rejected_for_integer_data_points(self) -> None:
+        examples = [
+            ("temp_set", "24.5"),
+            ("temp_set", 24.5),
+        ]
+        for code, value in examples:
+            with self.subTest(code=code, value=value):
+                normalized = normalize_command_value(code, value)
+                with self.assertRaisesRegex(ValueError, "integer"):
+                    validate_command(code, normalized)
 
     def test_invalid_cli_values_are_rejected(self) -> None:
         examples = [

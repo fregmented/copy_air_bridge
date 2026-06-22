@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 Access = Literal["ro", "rw"]
 DataType = Literal["bool", "enum", "value"]
+ValueType = Literal["int", "float"]
 
 
 @dataclass(frozen=True)
@@ -14,10 +15,11 @@ class DataPoint:
     code: str
     access: Access
     type: DataType
-    minimum: int | None = None
-    maximum: int | None = None
-    step: int | None = None
+    minimum: int | float | None = None
+    maximum: int | float | None = None
+    step: int | float | None = None
     values: tuple[str, ...] = ()
+    value_type: ValueType = "int"
 
     @property
     def writable(self) -> bool:
@@ -57,8 +59,37 @@ def status_to_codes(status: dict[str, Any]) -> dict[str, Any]:
     return coded_status
 
 
+def normalize_command_value(code: str, value: Any) -> Any:
+    data_point = DATA_POINTS[code]
+
+    if data_point.type != "value":
+        return value
+
+    if data_point.value_type == "int":
+        if isinstance(value, bool):
+            return value
+        try:
+            converted_float = float(value)
+        except (TypeError, ValueError):
+            return value
+        if converted_float.is_integer():
+            return int(converted_float)
+        return value
+
+    if data_point.value_type == "float":
+        if isinstance(value, bool):
+            return value
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return value
+
+    return value
+
+
 def validate_command(code: str, value: Any) -> DataPoint:
     data_point = DATA_POINTS[code]
+    value = normalize_command_value(code, value)
 
     if not data_point.writable:
         raise ValueError(f"{code} is read-only")
@@ -67,8 +98,10 @@ def validate_command(code: str, value: Any) -> DataPoint:
     if data_point.type == "enum" and value not in data_point.values:
         raise ValueError(f"{code} must be one of {', '.join(data_point.values)}")
     if data_point.type == "value":
-        if not isinstance(value, int):
+        if data_point.value_type == "int" and (isinstance(value, bool) or not isinstance(value, int)):
             raise ValueError(f"{code} must be an integer")
+        if data_point.value_type == "float" and (isinstance(value, bool) or not isinstance(value, float)):
+            raise ValueError(f"{code} must be a float")
         if data_point.minimum is not None and value < data_point.minimum:
             raise ValueError(f"{code} must be greater than or equal to {data_point.minimum}")
         if data_point.maximum is not None and value > data_point.maximum:

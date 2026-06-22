@@ -19,6 +19,36 @@ class ServerTest(unittest.TestCase):
             with patch("copy_air_bridge.server.TuyaAirConditioner", return_value=air_conditioner):
                 return create_app(), air_conditioner
 
+    def post_json(self, app, path: str, body: bytes) -> tuple[int, bytes]:
+        messages = []
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        async def send(message):
+            messages.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": [(b"host", b"testserver"), (b"content-type", b"application/json")],
+            "client": ("192.0.2.30", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+        }
+
+        asyncio.run(app(scope, receive, send))
+        status = next(message["status"] for message in messages if message["type"] == "http.response.start")
+        response_body = b"".join(
+            message.get("body", b"") for message in messages if message["type"] == "http.response.body"
+        )
+        return status, response_body
+
     def test_redoc_endpoint_is_configured(self) -> None:
         app, _ = self.create_test_app()
 
@@ -100,6 +130,16 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(route.endpoint(), {"temp_current": 23, "humidity": 48})
         air_conditioner.get_current_th.assert_called_once_with()
 
+    def test_command_endpoint_accepts_body_after_request_logging_reads_it(self) -> None:
+        app, air_conditioner = self.create_test_app()
+        air_conditioner.set_value.return_value = {"temp_set": 24}
+
+        status_code, response_body = self.post_json(app, "/commands/temp_set", b'{"value":24}')
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(response_body, b'{"temp_set":24}')
+        air_conditioner.set_value.assert_called_once_with("temp_set", 24)
+
     def test_ssdp_advertiser_receives_configured_interface(self) -> None:
         settings = Settings(
             ssdp=SsdpSettings(interface="192.0.2.20"),
@@ -143,7 +183,8 @@ class ServerTest(unittest.TestCase):
 
         log_output = format_request_log(request, 200, 12.345)
 
-        self.assertEqual(log_output, "HTTP GET /health?verbose=true from=192.0.2.30 status=200 duration=12.35ms")
+        self.assertIn("HTTP GET /health?verbose=true", log_output)
+        self.assertIn("from=192.0.2.30 status=200 duration=12.35ms", log_output)
 
     def test_request_log_format_contains_error_status_information(self) -> None:
         request = Request(
@@ -159,9 +200,12 @@ class ServerTest(unittest.TestCase):
             }
         )
 
-        log_output = format_request_log(request, 404, 1.2)
+        log_output = format_request_log(request, 404, 1.2, b'{"value":24}', b'{"detail":"Unknown data point: unknown"}')
 
-        self.assertEqual(log_output, "HTTP POST /commands/unknown from=192.0.2.30 status=404 duration=1.20ms")
+        self.assertIn("HTTP POST /commands/unknown", log_output)
+        self.assertIn('BODY=\n{"value":24}', log_output)
+        self.assertIn("from=192.0.2.30 status=404 duration=1.20ms", log_output)
+        self.assertIn('RESPONSE=\n{"detail":"Unknown data point: unknown"}', log_output)
 
 
 if __name__ == "__main__":

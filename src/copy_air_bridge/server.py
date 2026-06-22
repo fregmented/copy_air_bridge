@@ -49,10 +49,15 @@ class CommandRequest(BaseModel):
     value: Any
 
 
-async def format_request_log(request: Request, status_code: int, elapsed_ms: float, response_body: bytes = b'') -> str:
+def format_request_log(
+    request: Request,
+    status_code: int,
+    elapsed_ms: float,
+    request_body: bytes = b'',
+    response_body: bytes = b'',
+) -> str:
     client_host = request.client.host if request.client is not None else "unknown"
     query_string = f"?{request.url.query}" if request.url.query else ""
-    request_body = await request.body()
     return (
         f"""
 HTTP {request.method} {request.url.path}{query_string}
@@ -91,11 +96,17 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        refresh_task = asyncio.create_task(refresh_state_periodically())
         if ssdp_advertiser is not None:
             ssdp_advertiser.start()
         try:
             yield
         finally:
+            refresh_task.cancel()
+            try:
+                await refresh_task
+            except asyncio.CancelledError:
+                pass
             if ssdp_advertiser is not None:
                 ssdp_advertiser.stop()
 
@@ -105,6 +116,7 @@ def create_app() -> FastAPI:
     async def log_requests(request: Request, call_next) -> StarletteResponse:
         started_at = time.perf_counter()
         status_code = 500
+        request_body = await request.body()
         response_body = b""
         try:
             response = await call_next(request)
@@ -115,7 +127,7 @@ def create_app() -> FastAPI:
                             headers=response.headers, media_type=response.media_type,)
         finally:
             elapsed_ms = (time.perf_counter() - started_at) * 1000
-            LOGGER.info(await format_request_log(request, status_code, elapsed_ms, response_body))
+            LOGGER.info(format_request_log(request, status_code, elapsed_ms, request_body, response_body))
 
     @app.get("/health")
     def health() -> dict[str, str]:

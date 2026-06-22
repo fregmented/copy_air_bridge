@@ -10,7 +10,7 @@ from typing import Any
 from copy_air_bridge.config import DEFAULT_SETTINGS_PATH, load_settings
 from copy_air_bridge.state_machine import NotSupportedActionError
 from copy_air_bridge.tuya_client import TuyaAirConditioner
-from copy_air_bridge.tuya_model import DATA_POINTS, DataPoint, validate_command
+from copy_air_bridge.tuya_model import DATA_POINTS, DataPoint, normalize_command_value, validate_command
 
 
 class DeviceUnavailableError(RuntimeError):
@@ -127,6 +127,7 @@ class AirBridgeShell(cmd.Cmd):
 
         try:
             value = parse_value(data_point, raw_value)
+            value = normalize_command_value(code, value)
             validate_command(code, value)
         except ValueError as error:
             print(f"Invalid value: {error}")

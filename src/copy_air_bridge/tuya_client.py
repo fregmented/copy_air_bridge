@@ -6,7 +6,7 @@ import tinytuya
 
 from copy_air_bridge.config import TuyaDeviceSettings
 from copy_air_bridge.state_machine import DeviceStateMachine
-from copy_air_bridge.tuya_model import status_to_codes, validate_command
+from copy_air_bridge.tuya_model import normalize_command_value, status_to_codes, validate_command
 
 
 class TuyaAirConditioner:
@@ -33,6 +33,7 @@ class TuyaAirConditioner:
         return self._state_machine.get_current_th()
 
     def set_value(self, code: str, value: Any) -> dict[str, Any]:
+        value = normalize_command_value(code, value)
         data_point = validate_command(code, value)
         self._state_machine.validate_action(code, value)
         response = self._device.set_value(data_point.id, value)
