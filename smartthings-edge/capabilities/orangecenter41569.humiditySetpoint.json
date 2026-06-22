@@ -1,0 +1,44 @@
+{
+  "id": "orangecenter41569.humiditySetpoint",
+  "version": 1,
+  "name": "Humidity Setpoint",
+  "attributes": {
+    "humiditySetpoint": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "number",
+            "minimum": 35,
+            "maximum": 70,
+            "multipleOf": 5
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["%"]
+          }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      },
+      "setter": "setHumiditySetpoint"
+    }
+  },
+  "commands": {
+    "setHumiditySetpoint": {
+      "name": "setHumiditySetpoint",
+      "arguments": [
+        {
+          "name": "humidity",
+          "optional": false,
+          "schema": {
+            "type": "number",
+            "minimum": 35,
+            "maximum": 70,
+            "multipleOf": 5
+          }
+        }
+      ]
+    }
+  }
+}

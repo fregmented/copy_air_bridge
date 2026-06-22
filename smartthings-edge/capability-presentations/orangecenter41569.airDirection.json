@@ -1,0 +1,62 @@
+{
+  "id": "orangecenter41569.airDirection",
+  "version": 1,
+  "detailView": [
+    {
+      "label": "Air Direction",
+      "displayType": "list",
+      "list": {
+        "command": {
+          "name": "setAirDirection",
+          "alternatives": [
+            { "key": "Stop", "value": "Stop", "type": "active" },
+            { "key": "Horizontal", "value": "Horizontal", "type": "active" },
+            { "key": "Vertical", "value": "Vertical", "type": "active" },
+            { "key": "ALL", "value": "ALL", "type": "active" }
+          ]
+        },
+        "state": {
+          "value": "airDirection.value",
+          "alternatives": [
+            { "key": "Stop", "value": "Stop", "type": "active" },
+            { "key": "Horizontal", "value": "Horizontal", "type": "active" },
+            { "key": "Vertical", "value": "Vertical", "type": "active" },
+            { "key": "ALL", "value": "ALL", "type": "active" }
+          ]
+        }
+      }
+    }
+  ],
+  "automation": {
+    "conditions": [
+      {
+        "label": "Air Direction",
+        "displayType": "list",
+        "list": {
+          "alternatives": [
+            { "key": "Stop", "value": "Stop", "type": "active" },
+            { "key": "Horizontal", "value": "Horizontal", "type": "active" },
+            { "key": "Vertical", "value": "Vertical", "type": "active" },
+            { "key": "ALL", "value": "ALL", "type": "active" }
+          ],
+          "value": "airDirection.value"
+        }
+      }
+    ],
+    "actions": [
+      {
+        "label": "Air Direction",
+        "displayType": "list",
+        "list": {
+          "command": "setAirDirection",
+          "alternatives": [
+            { "key": "Stop", "value": "Stop", "type": "active" },
+            { "key": "Horizontal", "value": "Horizontal", "type": "active" },
+            { "key": "Vertical", "value": "Vertical", "type": "active" },
+            { "key": "ALL", "value": "ALL", "type": "active" }
+          ]
+        }
+      }
+    ]
+  }
+}

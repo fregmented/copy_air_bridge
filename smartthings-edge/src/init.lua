@@ -8,6 +8,12 @@ local json = require "dkjson"
 
 local mappings = require "tuya_mappings"
 
+local custom_capabilities = {
+  air_direction = capabilities["orangecenter41569.airDirection"],
+  humidity_setpoint = capabilities["orangecenter41569.humiditySetpoint"],
+  display_light = capabilities["orangecenter41569.displayLight"],
+}
+
 local SSDP_ADDRESS = "239.255.255.250"
 local SSDP_PORT = 1900
 local SSDP_SERVICE_TYPE = "urn:schemas-upnp-org:device:CopyAirBridge:1"
@@ -264,6 +270,18 @@ local function emit_status(device, status)
       device:emit_event(capabilities.airConditionerFanMode.fanMode(fan_mode))
     end
   end
+  if status.swing1 ~= nil then
+    local air_direction = mappings.air_direction_values[status.swing1]
+    if air_direction ~= nil then
+      device:emit_event(custom_capabilities.air_direction.airDirection(air_direction))
+    end
+  end
+  if status.humidityset ~= nil then
+    device:emit_event(custom_capabilities.humidity_setpoint.humiditySetpoint(status.humidityset))
+  end
+  if status.light ~= nil then
+    device:emit_event(custom_capabilities.display_light.displayLight(mappings.display_light_values[status.light]))
+  end
 end
 
 local function refresh_handler(driver, device)
@@ -362,6 +380,41 @@ local function fan_mode_handler(driver, device, command)
   end
 end
 
+local function air_direction_handler(driver, device, command)
+  local tuya_code = mappings.capability_to_tuya.airDirection
+  local requested_air_direction = command_arg(command, "direction", "airDirection", "value")
+  local tuya_air_direction = mappings.smartthings_air_direction_values[requested_air_direction]
+  if tuya_air_direction == nil then
+    log.warn(string.format("unsupported air direction: %s", tostring(requested_air_direction)))
+    return
+  end
+  log.info(string.format("set %s to %s", tuya_code, tuya_air_direction))
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = tuya_air_direction }, "set " .. tuya_code)
+  if status ~= nil then
+    emit_status(device, status)
+  end
+end
+
+local function humidity_setpoint_handler(driver, device, command)
+  local tuya_code = mappings.capability_to_tuya.humiditySetpoint
+  local value = command_arg(command, "humidity", "humiditySetpoint", "value")
+  log.info(string.format("set %s to %s", tuya_code, tostring(value)))
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value }, "set " .. tuya_code)
+  if status ~= nil then
+    emit_status(device, status)
+  end
+end
+
+local function display_light_handler(driver, device, command)
+  local tuya_code = mappings.capability_to_tuya.displayLight
+  local value = command.command == custom_capabilities.display_light.commands.on.NAME
+  log.info(string.format("set %s to %s", tuya_code, tostring(value)))
+  local status = request_json(device, "POST", "/commands/" .. tuya_code, { value = value }, "set " .. tuya_code)
+  if status ~= nil then
+    emit_status(device, status)
+  end
+end
+
 local function discovery_handler(driver, _, should_continue)
   log.info("SmartThings discovery handler started")
   if should_continue ~= nil and not should_continue() then
@@ -448,6 +501,16 @@ local copy_air_bridge = Driver("copy-air-bridge", {
     },
     [capabilities.airConditionerFanMode.ID] = {
       [capabilities.airConditionerFanMode.commands.setFanMode.NAME] = fan_mode_handler,
+    },
+    [custom_capabilities.air_direction.ID] = {
+      [custom_capabilities.air_direction.commands.setAirDirection.NAME] = air_direction_handler,
+    },
+    [custom_capabilities.humidity_setpoint.ID] = {
+      [custom_capabilities.humidity_setpoint.commands.setHumiditySetpoint.NAME] = humidity_setpoint_handler,
+    },
+    [custom_capabilities.display_light.ID] = {
+      [custom_capabilities.display_light.commands.on.NAME] = display_light_handler,
+      [custom_capabilities.display_light.commands.off.NAME] = display_light_handler,
     },
   },
 })

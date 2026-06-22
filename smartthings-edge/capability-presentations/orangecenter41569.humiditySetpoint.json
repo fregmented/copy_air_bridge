@@ -1,0 +1,43 @@
+{
+  "id": "orangecenter41569.humiditySetpoint",
+  "version": 1,
+  "detailView": [
+    {
+      "label": "Humidity Setpoint",
+      "displayType": "slider",
+      "slider": {
+        "range": [35, 70],
+        "step": 5,
+        "unit": "humiditySetpoint.unit",
+        "command": "setHumiditySetpoint",
+        "value": "humiditySetpoint.value"
+      }
+    }
+  ],
+  "automation": {
+    "conditions": [
+      {
+        "label": "Humidity Setpoint",
+        "displayType": "numberField",
+        "numberField": {
+          "value": "humiditySetpoint.value",
+          "range": [35, 70],
+          "step": 5,
+          "unit": "humiditySetpoint.unit"
+        }
+      }
+    ],
+    "actions": [
+      {
+        "label": "Humidity Setpoint",
+        "displayType": "numberField",
+        "numberField": {
+          "command": "setHumiditySetpoint",
+          "range": [35, 70],
+          "step": 5,
+          "unit": "humiditySetpoint.unit"
+        }
+      }
+    ]
+  }
+}

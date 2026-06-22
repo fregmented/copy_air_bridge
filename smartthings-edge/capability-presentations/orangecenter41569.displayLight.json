@@ -1,0 +1,48 @@
+{
+  "id": "orangecenter41569.displayLight",
+  "version": 1,
+  "detailView": [
+    {
+      "label": "Display Light",
+      "displayType": "toggleSwitch",
+      "toggleSwitch": {
+        "command": {
+          "on": "on",
+          "off": "off"
+        },
+        "state": {
+          "value": "displayLight.value",
+          "on": "On",
+          "off": "Off"
+        }
+      }
+    }
+  ],
+  "automation": {
+    "conditions": [
+      {
+        "label": "Display Light",
+        "displayType": "list",
+        "list": {
+          "alternatives": [
+            { "key": "On", "value": "On", "type": "active" },
+            { "key": "Off", "value": "Off", "type": "inactive" }
+          ],
+          "value": "displayLight.value"
+        }
+      }
+    ],
+    "actions": [
+      {
+        "label": "Display Light",
+        "displayType": "list",
+        "list": {
+          "alternatives": [
+            { "key": "On", "value": "On", "type": "active" },
+            { "key": "Off", "value": "Off", "type": "inactive" }
+          ]
+        }
+      }
+    ]
+  }
+}

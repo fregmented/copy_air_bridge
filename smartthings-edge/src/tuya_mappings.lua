@@ -5,6 +5,9 @@ mappings.writable_capabilities = {
   thermostatCoolingSetpoint = true,
   airConditionerMode = true,
   airConditionerFanMode = true,
+  ["orangecenter41569.airDirection"] = true,
+  ["orangecenter41569.humiditySetpoint"] = true,
+  ["orangecenter41569.displayLight"] = true,
 }
 
 mappings.capability_to_tuya = {
@@ -14,6 +17,9 @@ mappings.capability_to_tuya = {
   relativeHumidityMeasurement = "humidity",
   airConditionerMode = "mode",
   airConditionerFanMode = "fan_speed_enum",
+  airDirection = "swing1",
+  humiditySetpoint = "humidityset",
+  displayLight = "light",
 }
 
 mappings.tuya_to_capability = {
@@ -23,6 +29,9 @@ mappings.tuya_to_capability = {
   humidity = "relativeHumidityMeasurement",
   mode = "airConditionerMode",
   fan_speed_enum = "airConditionerFanMode",
+  swing1 = "airDirection",
+  humidityset = "humiditySetpoint",
+  light = "displayLight",
 }
 
 mappings.mode_values = {
@@ -61,6 +70,25 @@ mappings.smartthings_fan_mode_values = {
   Low = "low",
   Mid = "middle",
   High = "high",
+}
+
+mappings.air_direction_values = {
+  stop = "Stop",
+  leftright = "Horizontal",
+  updown = "Vertical",
+  all = "ALL",
+}
+
+mappings.smartthings_air_direction_values = {
+  Stop = "stop",
+  Horizontal = "leftright",
+  Vertical = "updown",
+  ALL = "all",
+}
+
+mappings.display_light_values = {
+  [true] = "On",
+  [false] = "Off",
 }
 
 return mappings

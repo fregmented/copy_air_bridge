@@ -1,0 +1,30 @@
+{
+  "id": "orangecenter41569.displayLight",
+  "version": 1,
+  "name": "Display Light",
+  "attributes": {
+    "displayLight": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["On", "Off"]
+          }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      }
+    }
+  },
+  "commands": {
+    "on": {
+      "name": "on",
+      "arguments": []
+    },
+    "off": {
+      "name": "off",
+      "arguments": []
+    }
+  }
+}

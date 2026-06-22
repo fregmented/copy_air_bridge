@@ -1,0 +1,36 @@
+{
+  "id": "orangecenter41569.airDirection",
+  "version": 1,
+  "name": "Air Direction",
+  "attributes": {
+    "airDirection": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["Stop", "Horizontal", "Vertical", "ALL"]
+          }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      },
+      "setter": "setAirDirection"
+    }
+  },
+  "commands": {
+    "setAirDirection": {
+      "name": "setAirDirection",
+      "arguments": [
+        {
+          "name": "direction",
+          "optional": false,
+          "schema": {
+            "type": "string",
+            "enum": ["Stop", "Horizontal", "Vertical", "ALL"]
+          }
+        }
+      ]
+    }
+  }
+}

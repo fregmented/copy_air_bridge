@@ -1,4 +1,16 @@
 name: air-conditioner
+dashboard:
+  states:
+    - component: main
+      capability: thermostatCoolingSetpoint
+      version: 1
+      values:
+        - key: coolingSetpoint.value
+          range:
+            - 16
+            - 32
+          step: 1
+  actions: []
 components:
   - id: main
     capabilities:
@@ -13,6 +25,12 @@ components:
       - id: airConditionerMode
         version: 1
       - id: airConditionerFanMode
+        version: 1
+      - id: orangecenter41569.airDirection
+        version: 1
+      - id: orangecenter41569.humiditySetpoint
+        version: 1
+      - id: orangecenter41569.displayLight
         version: 1
       - id: refresh
         version: 1
